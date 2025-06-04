@@ -1,0 +1,37 @@
+{
+  "name": "hono-langgraph-tgbot",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy --minify",
+    "cf-typegen": "wrangler types --env-interface CloudflareBindings",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:push": "drizzle-kit push",
+    "db:studio": "drizzle-kit studio"
+  },
+  "dependencies": {
+    "@langchain/core": "^0.3.57",
+    "@langchain/langgraph": "^0.3.0",
+    "@langchain/openai": "^0.5.11",
+    "@neondatabase/serverless": "^1.0.0",
+    "@solana/web3.js": "^1.98.2",
+    "drizzle-orm": "^0.44.1",
+    "grammy": "^1.36.3",
+    "helius-sdk": "^1.5.1",
+    "hono": "^4.7.11",
+    "pg": "^8.16.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250604.0",
+    "@types/pg": "^8.15.4",
+    "drizzle-kit": "^0.31.1",
+    "wrangler": "^4.19.1"
+  },
+  "prettier": {
+    "semi": true,
+    "singleQuote": false,
+    "trailingComma": "all",
+    "printWidth": 120
+  },
+  "packageManager": "bun@1.2.15"
+}
