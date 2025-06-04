@@ -3,7 +3,10 @@
   "name": "hono-langgraph",
   "main": "src/index.ts",
   "compatibility_date": "2025-06-04",
-  "compatibility_flags": ["nodejs_compat", "nodejs_compat_populate_process_env"]
+  "compatibility_flags": ["nodejs_compat", "nodejs_compat_populate_process_env"],
+  "triggers": {
+    "crons": ["* * * * *"]
+  }
   // "vars": {
   //   "MY_VAR": "my-variable"
   // },

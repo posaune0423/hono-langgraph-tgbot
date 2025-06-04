@@ -1,15 +1,16 @@
 {
   "name": "hono-langgraph-tgbot",
   "scripts": {
-    "dev": "wrangler dev",
+    "dev": "wrangler dev --test-scheduled",
     "deploy": "wrangler deploy --minify",
     "cf-typegen": "wrangler types --env-interface CloudflareBindings",
-    "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate",
-    "db:push": "drizzle-kit push",
-    "db:studio": "drizzle-kit studio"
+    "db:generate": "dotenvx run -f .dev.vars -- drizzle-kit generate",
+    "db:migrate": "dotenvx run -f .dev.vars -- drizzle-kit migrate",
+    "db:push": "dotenvx run -f .dev.vars -- drizzle-kit push",
+    "db:studio": "dotenvx run -f .dev.vars -- drizzle-kit studio"
   },
   "dependencies": {
+    "@langchain/community": "^0.3.45",
     "@langchain/core": "^0.3.57",
     "@langchain/langgraph": "^0.3.0",
     "@langchain/openai": "^0.5.11",

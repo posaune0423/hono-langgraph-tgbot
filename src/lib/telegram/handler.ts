@@ -1,7 +1,6 @@
 import type { Bot, Context } from "grammy";
 import { initGraph } from "../../graph";
 import { HumanMessage, AIMessage } from "@langchain/core/messages";
-import { TIMEOUT_MS } from "../../constants";
 import type { StreamChunk } from "../../types";
 import { logger } from "../../utils/logger";
 import { SetupStep } from "../../types";
@@ -9,11 +8,7 @@ import { proceedToNextStep } from "./command";
 import { validateSolanaAddress } from "../../utils/solana";
 import { dumpTokenUsage, isAnalyzerMessage, isGeneralistMessage } from "../../utils";
 import { getUserProfile, updateUserProfile } from "../../utils/query";
-
-// timeout processing
-const timeoutPromise = new Promise((_, reject) =>
-    setTimeout(() => reject(new Error("Timeout")), TIMEOUT_MS),
-);
+import { timeoutPromise } from "../../utils";
 
 // NOTE: In-memory chat history for session state
 const chatHistory = new Map();
