@@ -4,6 +4,8 @@
     ".dev.vars.example": "dotenv"
   },
   "cSpell.words": [
-    "Ohlcv"
+    "Ohlcv",
+    "Solana",
+    "Vybe"
   ]
 }

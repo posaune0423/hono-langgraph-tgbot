@@ -17,7 +17,7 @@ alwaysApply: true
 ├── package.json
 ├── README.md
 ├── src
-│   ├── constants # 諸々の定数を記述
+│   ├── constants # 諸々の定数を記述, 責務毎に分かりやすい名前のファイルを作成して管理しやすくしてください
 │   ├── cron.ts # cron処理で行う処理を記述
 │   ├── db.ts # drizzleのテーブル定義やschemaの記述
 │   ├── graph.ts # lang graphのentry point
@@ -35,3 +35,4 @@ alwaysApply: true
 
 ## 注意
 - `console.log`ではなく腐敗防止層かつcolorrisedされたloggerを使用して下さい
+- あまり小難しいことをしすぎないで、指示にsimpleに素直に従ってください。advancedなことをする場合はまずsimpleな実装をした後、私に確認を取ってください。
