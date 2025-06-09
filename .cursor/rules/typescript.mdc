@@ -253,6 +253,9 @@ TypeScript でのコーディングにおける一般的なベストプラクテ
 5. Logging
    - `console.log()`などは使わず`utils/logger`の`logger.info` , `logger.error`などを使用してください
 
+6. 例外処理
+  - try-catchを多用しすぎないでください。必ず必要な箇所のみに使用し、ある処理の例外を一番外側の実装でcatchできるようにしてください
+
 ### モジュールのエクスポート
 
 #### default exportのみを使うべきケース

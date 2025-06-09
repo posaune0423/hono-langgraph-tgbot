@@ -1,0 +1,9 @@
+{
+  "files.associations": {
+    ".dev.vars": "dotenv",
+    ".dev.vars.example": "dotenv"
+  },
+  "cSpell.words": [
+    "Ohlcv"
+  ]
+}

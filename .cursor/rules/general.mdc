@@ -1,0 +1,37 @@
+---
+description:
+globs:
+alwaysApply: true
+---
+# General Instructions
+
+## Folder Structure
+
+```bash
+.
+├── bun.lock
+├── drizzle.config.ts
+├── migrations
+│   ├── 0000_parallel_ronan.sql
+│   └── meta
+├── package.json
+├── README.md
+├── src
+│   ├── constants # 諸々の定数を記述
+│   ├── cron.ts # cron処理で行う処理を記述
+│   ├── db.ts # drizzleのテーブル定義やschemaの記述
+│   ├── graph.ts # lang graphのentry point
+│   ├── lib # third-party libraryやlibとして切り出したほうがいいinternalなmoduleなどを格納
+│   ├── nodes # langgraphのノード単位でファイルを置く
+│   ├── prompts # promptsを管理しやすいように切り出したフォルダ
+│   ├── routes # Honoのroute、APIの各endpointを管理、ある程度の責務でまとめたrouteとして渡す
+│   ├── types # Typescriptの型定義
+│   ├── utils # globalに使うutil関数
+│   └── worker.ts # cloudflare workerのendpoint
+├── tsconfig.json
+├── worker-configuration.d.ts
+└── wrangler.jsonc
+```
+
+## 注意
+- `console.log`ではなく腐敗防止層かつcolorrisedされたloggerを使用して下さい
