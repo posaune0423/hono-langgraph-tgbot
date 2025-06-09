@@ -10,7 +10,7 @@
     "db:studio": "dotenvx run -f .dev.vars -- drizzle-kit studio",
     "build": "tsup src/**/*.ts",
     "format": "prettier --write .",
-    "test": "vitest run test/**/*.ts"
+    "test": "dotenvx run -f .dev.vars -- vitest run"
   },
   "dependencies": {
     "@langchain/community": "^0.3.45",

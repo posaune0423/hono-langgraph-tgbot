@@ -49,7 +49,7 @@ const authFetch = (url: string) => {
  * @param resolution 時間軸（1h, 4h, 1d, 1w）
  * @param options オプションパラメータ
  */
-export const getTokenOHLCV = async (
+export const fetchTokenOHLCV = async (
   mintAddress: string,
   resolution: VybeTimeframe = "1d",
   options?: {
@@ -181,7 +181,7 @@ export const getTokenOHLCV = async (
  * @param resolution 時間軸（1h, 4h, 1d, 1w）
  * @param options オプションパラメータ
  */
-export const getMultipleTokenOHLCV = async (
+export const fetchMultipleTokenOHLCV = async (
   mintAddresses: string[],
   resolution: VybeTimeframe = "1d",
   options?: {
@@ -220,7 +220,7 @@ export const getMultipleTokenOHLCV = async (
 
   try {
     const promises = uniqueAddresses.map(async (mintAddress) => {
-      const result = await getTokenOHLCV(mintAddress, resolution, options);
+      const result = await fetchTokenOHLCV(mintAddress, resolution, options);
       return { mintAddress, result };
     });
 
