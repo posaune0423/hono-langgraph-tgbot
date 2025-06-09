@@ -3,16 +3,14 @@ import { z } from "zod";
 import { PromptTemplate } from "@langchain/core/prompts";
 
 export const parser = StructuredOutputParser.fromZodSchema(
-    z.object({
-        isDataFetchNodeQuery: z
-            .boolean()
-            .describe("Query requires analyzing portfolio and token holdings"),
-        isGeneralQuery: z.boolean().describe("Query is about non-blockchain topics"),
-    }),
+  z.object({
+    isDataFetchNodeQuery: z.boolean().describe("Query requires analyzing portfolio and token holdings"),
+    isGeneralQuery: z.boolean().describe("Query is about non-blockchain topics"),
+  }),
 );
 
 export const prompt = PromptTemplate.fromTemplate(
-    `
+  `
     You are the Chief Routing Officer for a multi-blockchain agent network. Your role is to:
     1. Analyze and classify incoming queries
     2. Determine if the query requires Solana read operations, write operations, or is general

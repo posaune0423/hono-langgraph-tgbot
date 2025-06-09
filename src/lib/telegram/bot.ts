@@ -7,20 +7,20 @@ import { setupCommands } from "./command";
  * @returns webhookCallback handler
  */
 export const setupTelegramBot = () => {
-    // get Telegram bot token
-    const token = process.env.TELEGRAM_BOT_TOKEN;
-    if (!token) {
-        throw new Error("TELEGRAM_BOT_TOKEN environment variable not found.");
-    }
+  // get Telegram bot token
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  if (!token) {
+    throw new Error("TELEGRAM_BOT_TOKEN environment variable not found.");
+  }
 
-    // create bot
-    const bot = new Bot(token);
+  // create bot
+  const bot = new Bot(token);
 
-    // commands
-    setupCommands(bot);
+  // commands
+  setupCommands(bot);
 
-    // text message handler
-    setupHandler(bot);
+  // text message handler
+  setupHandler(bot);
 
-    return bot;
+  return bot;
 };

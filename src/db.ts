@@ -43,13 +43,38 @@ export const chatHistory = pgTable("chat_history", {
   timestamp: timestamp("timestamp").defaultNow().notNull(),
 });
 
+export const tokens = pgTable("tokens", {
+  address: text("address").primaryKey().notNull(),
+  name: text("name").notNull(),
+  symbol: text("symbol").notNull(),
+  decimals: integer("decimals").notNull(),
+  logoURI: text("logo_uri").notNull(),
+});
+
+export const tokenOHLCV = pgTable("token_ohlcv", {
+  token: text("token")
+    .notNull()
+    .references(() => tokens.address),
+  timestamp: timestamp("timestamp").defaultNow().notNull(),
+  open: integer("open").notNull(),
+  high: integer("high").notNull(),
+  low: integer("low").notNull(),
+  close: integer("close").notNull(),
+  volume: integer("volume").notNull(),
+});
+
 // Export types for use in other files
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
 export type ChatMessage = typeof chatHistory.$inferSelect;
 export type NewChatMessage = typeof chatHistory.$inferInsert;
 
-let dbInstance: ReturnType<typeof drizzle> | null = null;
+export type Token = typeof tokens.$inferSelect;
+export type NewToken = typeof tokens.$inferInsert;
+export type TokenOHLCV = typeof tokenOHLCV.$inferSelect;
+export type NewTokenOHLCV = typeof tokenOHLCV.$inferInsert;
+
+let dbInstance: ReturnType<typeof drizzle<typeof schema>> | null = null;
 
 export function getDB() {
   if (!dbInstance) {
@@ -65,7 +90,7 @@ export function getDB() {
   return dbInstance;
 }
 
-const schema = { users, chatHistory };
+const schema = { users, chatHistory, tokens, tokenOHLCV };
 
 // Export schema for external usage
 export { schema };

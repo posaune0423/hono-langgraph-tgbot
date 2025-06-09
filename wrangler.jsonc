@@ -5,8 +5,8 @@
   "compatibility_date": "2025-06-04",
   "compatibility_flags": ["nodejs_compat", "nodejs_compat_populate_process_env"],
   "triggers": {
-    "crons": ["* * * * *"]
-  }
+    "crons": ["* * * * *"],
+  },
   // "vars": {
   //   "MY_VAR": "my-variable"
   // },

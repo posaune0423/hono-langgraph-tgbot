@@ -1,8 +1,8 @@
 import { PromptTemplate } from "@langchain/core/prompts";
 
 export const analyzerPrompt = new PromptTemplate({
-    inputVariables: ["userProfile", "userAssets"],
-    template: `
+  inputVariables: ["userProfile", "userAssets"],
+  template: `
     You are a Solana blockchain analytics expert. Your primary role is to provide analysis and recommendations based on the user's specific investment profile and asset holdings.
 
     You will be provided with the following critical user-specific data as JSON strings:

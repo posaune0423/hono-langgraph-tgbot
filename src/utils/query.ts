@@ -19,10 +19,14 @@ export const createUserProfile = async (profile: NewUser) => {
 };
 
 export const upsertUserProfile = async (profile: NewUser) => {
-  const [user] = await db.insert(users).values(profile).onConflictDoUpdate({
-    target: users.userId,
-    set: profile
-  }).returning();
+  const [user] = await db
+    .insert(users)
+    .values(profile)
+    .onConflictDoUpdate({
+      target: users.userId,
+      set: profile,
+    })
+    .returning();
   return user;
 };
 

@@ -1,18 +1,16 @@
 import type { graphState } from "./state";
 import { END } from "@langchain/langgraph";
 
-export const managerRouter = (
-    state: typeof graphState.State,
-): "dataFetch" | "generalist" | typeof END => {
-    const { isDataFetchNodeQuery, isGeneralQuery } = state;
+export const managerRouter = (state: typeof graphState.State): "dataFetch" | "generalist" | typeof END => {
+  const { isDataFetchNodeQuery, isGeneralQuery } = state;
 
-    if (isDataFetchNodeQuery) {
-        return "dataFetch";
-    }
+  if (isDataFetchNodeQuery) {
+    return "dataFetch";
+  }
 
-    if (isGeneralQuery) {
-        return "generalist";
-    }
+  if (isGeneralQuery) {
+    return "generalist";
+  }
 
-    return END;
+  return END;
 };

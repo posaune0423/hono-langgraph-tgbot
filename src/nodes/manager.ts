@@ -5,20 +5,18 @@ import { prompt, parser } from "../prompts/manager";
 
 const chain = RunnableSequence.from([prompt, gpt4o, parser]);
 
-export const managerNode = async (
-    state: typeof graphState.State,
-): Promise<Partial<typeof graphState.State>> => {
-    const { messages } = state;
+export const managerNode = async (state: typeof graphState.State): Promise<Partial<typeof graphState.State>> => {
+  const { messages } = state;
 
-    const result = await chain.invoke({
-        formatInstructions: parser.getFormatInstructions(),
-        messages: messages,
-    });
+  const result = await chain.invoke({
+    formatInstructions: parser.getFormatInstructions(),
+    messages: messages,
+  });
 
-    const { isDataFetchNodeQuery, isGeneralQuery } = result;
+  const { isDataFetchNodeQuery, isGeneralQuery } = result;
 
-    return {
-        isDataFetchNodeQuery,
-        isGeneralQuery,
-    };
+  return {
+    isDataFetchNodeQuery,
+    isGeneralQuery,
+  };
 };

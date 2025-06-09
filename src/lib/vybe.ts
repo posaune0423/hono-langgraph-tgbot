@@ -1,5 +1,4 @@
 // NOTE: @see https://docs.vybenetwork.com/reference/get_token_trade_ohlc
-// Vybe Network API Token-OHLCV の型定義
 
 import { ok, err, Result } from "neverthrow";
 import { logger } from "../utils/logger";

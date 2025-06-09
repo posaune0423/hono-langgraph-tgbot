@@ -3,9 +3,7 @@ import type { StreamChunk } from "../types";
 import { logger } from "./logger";
 
 // timeout processing
-export const timeoutPromise = new Promise((_, reject) =>
-  setTimeout(() => reject(new Error("Timeout")), TIMEOUT_MS),
-);
+export const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), TIMEOUT_MS));
 
 export const dumpTokenUsage = (chunk: StreamChunk) => {
   // Dump token usage

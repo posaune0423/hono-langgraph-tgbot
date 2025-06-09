@@ -1,9 +1,9 @@
 import { ChatPromptTemplate, MessagesPlaceholder } from "@langchain/core/prompts";
 
 export const twitterPrompt = ChatPromptTemplate.fromMessages([
-    [
-        "system",
-        `You are a Twitter search specialist focused on analyzing Twitter conversations about Solana tokens and assets. Your role is to compose effective search queries based on on-chain data and analyze the resulting tweets.
+  [
+    "system",
+    `You are a Twitter search specialist focused on analyzing Twitter conversations about Solana tokens and assets. Your role is to compose effective search queries based on on-chain data and analyze the resulting tweets.
 
 Key Responsibilities:
 1. Extract 1-2 key token symbols or names from the on-chain data
@@ -50,6 +50,6 @@ Remember:
 - Provide timestamp context
 
 Your role is to bridge on-chain data with Twitter discussions by crafting targeted searches based on the user's blockchain activity.`,
-    ],
-    new MessagesPlaceholder("messages"),
+  ],
+  new MessagesPlaceholder("messages"),
 ]);

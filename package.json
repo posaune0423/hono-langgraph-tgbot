@@ -8,7 +8,9 @@
     "db:migrate": "dotenvx run -f .dev.vars -- drizzle-kit migrate",
     "db:push": "dotenvx run -f .dev.vars -- drizzle-kit push",
     "db:studio": "dotenvx run -f .dev.vars -- drizzle-kit studio",
-    "build": "tsup src/**/*.ts"
+    "build": "tsup src/**/*.ts",
+    "format": "prettier --write .",
+    "test": "vitest run test/**/*.ts"
   },
   "dependencies": {
     "@langchain/community": "^0.3.45",
@@ -29,7 +31,9 @@
     "@cloudflare/workers-types": "^4.20250604.0",
     "@types/pg": "^8.15.4",
     "drizzle-kit": "^0.31.1",
+    "prettier": "^3.5.3",
     "tsup": "^8.5.0",
+    "vitest": "^3.2.2",
     "wrangler": "^4.19.1"
   },
   "prettier": {

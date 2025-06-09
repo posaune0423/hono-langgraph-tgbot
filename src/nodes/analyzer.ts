@@ -9,21 +9,19 @@ import { logger } from "../utils/logger";
 const tools: Tool[] = [];
 
 export const analyzerAgent = createReactAgent({
-    llm: gpt4oMini,
-    tools,
-    checkpointSaver: memory,
-    prompt: analyzerPrompt,
-    stateSchema: graphState,
+  llm: gpt4oMini,
+  tools,
+  checkpointSaver: memory,
+  prompt: analyzerPrompt,
+  stateSchema: graphState,
 });
 
-export const analyzerNode = async (
-    state: typeof graphState.State,
-): Promise<Partial<typeof graphState.State>> => {
-    logger.info("analyzerNode", "analyzerNode", state);
-    const { messages, userAssets, userProfile } = state;
+export const analyzerNode = async (state: typeof graphState.State): Promise<Partial<typeof graphState.State>> => {
+  logger.info("analyzerNode", "analyzerNode", state);
+  const { messages, userAssets, userProfile } = state;
 
-    const result = await analyzerAgent.invoke({ messages, userAssets, userProfile });
-    logger.info("analyzerNode", "analyzer result", result);
+  const result = await analyzerAgent.invoke({ messages, userAssets, userProfile });
+  logger.info("analyzerNode", "analyzer result", result);
 
-    return { messages: [...result.messages] };
+  return { messages: [...result.messages] };
 };

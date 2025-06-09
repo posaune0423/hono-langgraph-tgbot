@@ -10,22 +10,20 @@ const tools: Tool[] = [];
 
 // Only add Tavily search if API key is available
 if (process.env.TAVILY_API_KEY) {
-    tools.push(new TavilySearchResults());
+  tools.push(new TavilySearchResults());
 }
 
 const generalAgent = createReactAgent({
-    llm: gpt4oMini,
-    tools,
-    checkpointSaver: memory,
-    prompt: generalPrompt,
+  llm: gpt4oMini,
+  tools,
+  checkpointSaver: memory,
+  prompt: generalPrompt,
 });
 
-export const generalistNode = async (
-    state: typeof graphState.State,
-): Promise<Partial<typeof graphState.State>> => {
-    const { messages } = state;
+export const generalistNode = async (state: typeof graphState.State): Promise<Partial<typeof graphState.State>> => {
+  const { messages } = state;
 
-    const result = await generalAgent.invoke({ messages });
+  const result = await generalAgent.invoke({ messages });
 
-    return { messages: [...result.messages] };
+  return { messages: [...result.messages] };
 };

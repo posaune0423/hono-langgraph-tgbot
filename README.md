@@ -96,6 +96,7 @@ bun run deploy
 ## Database Schema
 
 ### Users Table
+
 - `userId` (Primary Key) - Telegram user ID
 - `walletAddress` - Solana wallet address
 - `age` - User age
@@ -112,6 +113,7 @@ bun run deploy
 - `createdAt` - Creation timestamp
 
 ### Chat History Table
+
 - `messageId` (Primary Key) - Message ID
 - `userId` (Foreign Key) - Reference to users table
 - `content` - Message content
