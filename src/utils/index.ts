@@ -37,3 +37,10 @@ export const isAnalyzerMessage = (chunk: StreamChunk) => {
 export const isGeneralistMessage = (chunk: StreamChunk) => {
   return "generalist" in chunk && chunk.generalist?.messages?.length > 0;
 };
+
+/**
+ * Sleep utility for rate limiting
+ */
+export const sleep = (ms: number): Promise<void> => {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+};

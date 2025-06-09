@@ -2,7 +2,7 @@ import type { Bot, Context } from "grammy";
 import { InlineKeyboard } from "grammy";
 import { welcomeMessage } from "./messageTemplates";
 import { SetupStep } from "../../types";
-import { getUserProfile, updateUserProfile, upsertUserProfile } from "../../utils/query";
+import { getUserProfile, updateUserProfile, upsertUserProfile } from "../../utils/db";
 import { NewUser } from "../../db";
 
 export const setupCommands = (bot: Bot) => {

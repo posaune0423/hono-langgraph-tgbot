@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import webhookRoute from "./routes/webhook";
+import adminRoute from "./routes/admin";
 import { logger } from "./utils/logger";
 import { runCronTasks } from "./cron";
 
@@ -7,6 +8,9 @@ const app = new Hono();
 
 // Telegram webhook endpoint
 app.route("/webhook", webhookRoute);
+
+// Admin API endpoints
+app.route("/admin", adminRoute);
 
 // --- Root and Maintenance Routes ---
 app.get("/", (c) => c.json({ status: "ok", message: "Hono server running!" }));

@@ -7,7 +7,7 @@ import { SetupStep } from "../../types";
 import { proceedToNextStep } from "./command";
 import { validateSolanaAddress } from "../../utils/solana";
 import { dumpTokenUsage, isAnalyzerMessage, isGeneralistMessage } from "../../utils";
-import { getUserProfile, updateUserProfile } from "../../utils/query";
+import { getUserProfile, updateUserProfile } from "../../utils/db";
 import { timeoutPromise } from "../../utils";
 
 // NOTE: In-memory chat history for session state

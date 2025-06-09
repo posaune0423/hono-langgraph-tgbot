@@ -72,3 +72,66 @@ export interface LogEntry {
   // biome-ignore lint/suspicious/noExplicitAny: data could be anything
   data?: any;
 }
+
+// Admin message sending types
+export interface AdminSendMessageRequest {
+  userId: string;
+  message: string;
+  parseMode?: "HTML" | "Markdown" | "MarkdownV2";
+}
+
+export interface AdminSendMessageResponse {
+  success: boolean;
+  messageId?: number;
+  error?: string;
+}
+
+// Broadcast message types
+export interface AdminBroadcastRequest {
+  message: string;
+  parseMode?: "HTML" | "Markdown" | "MarkdownV2";
+  excludeUserIds?: string[]; // Optional: exclude specific users
+}
+
+export interface BroadcastResult {
+  userId: string;
+  success: boolean;
+  messageId?: number;
+  error?: string;
+}
+
+export interface AdminBroadcastResponse {
+  success: boolean;
+  totalUsers: number;
+  results: BroadcastResult[];
+}
+
+// neverthrow error types
+export type TelegramError = {
+  type: "forbidden" | "network" | "invalid_user" | "rate_limit" | "unknown";
+  message: string;
+  userId?: string;
+};
+
+export type DatabaseError = {
+  type: "connection" | "query" | "not_found";
+  message: string;
+};
+
+export type BroadcastError = {
+  type: "database" | "empty_users" | "partial_failure";
+  message: string;
+  details?: string[];
+};
+
+// Success types for neverthrow
+export type MessageSentResult = {
+  userId: string;
+  messageId: number;
+};
+
+export type UserListResult = {
+  userIds: string[];
+  totalCount: number;
+  excludedCount: number;
+};
