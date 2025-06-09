@@ -8,7 +8,7 @@
     "db:migrate": "dotenvx run -f .dev.vars -- drizzle-kit migrate",
     "db:push": "dotenvx run -f .dev.vars -- drizzle-kit push",
     "db:studio": "dotenvx run -f .dev.vars -- drizzle-kit studio",
-    "build": "tsup src/**/*.ts",
+    "build": "tsup src/**/*.ts --dts --format esm",
     "format": "prettier --write .",
     "test": "dotenvx run -f .dev.vars -- vitest run"
   },

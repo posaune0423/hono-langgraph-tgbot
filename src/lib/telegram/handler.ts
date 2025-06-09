@@ -5,7 +5,7 @@ import type { StreamChunk } from "../../types";
 import { logger } from "../../utils/logger";
 import { SetupStep } from "../../types";
 import { proceedToNextStep } from "./command";
-import { validateSolanaAddress } from "../../utils/solana";
+import { isValidSolanaAddress } from "../../utils/solana";
 import { dumpTokenUsage, isAnalyzerMessage, isGeneralistMessage } from "../../utils";
 import { getUserProfile, updateUserProfile } from "../../utils/db";
 import { timeoutPromise } from "../../utils";
@@ -33,7 +33,7 @@ export const setupHandler = (bot: Bot) => {
         // Process input values for setup
         switch (waitingFor) {
           case SetupStep.WALLET_ADDRESS: {
-            if (!validateSolanaAddress(text)) {
+            if (!isValidSolanaAddress(text)) {
               await ctx.reply("Please enter a valid wallet address.", {
                 parse_mode: "Markdown",
               });
