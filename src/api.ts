@@ -3,7 +3,7 @@ import webhookRoute from "./routes/webhook";
 import adminRoute from "./routes/admin";
 import { logger } from "./utils/logger";
 import { cors } from "hono/cors";
-import { ALLOWED_ORIGINS } from "./constants";
+import { ADMIN_API_KEY_HEADER, ALLOWED_ORIGINS } from "./constants";
 
 const app = new Hono();
 
@@ -17,7 +17,7 @@ app.use(
     allowHeaders: [
       "Content-Type",
       "Authorization",
-      "X-Admin-API-Key",
+      ADMIN_API_KEY_HEADER,
       "ngrok-skip-browser-warning", // Added for ngrok testing if needed
     ],
     exposeHeaders: ["Content-Length"],
