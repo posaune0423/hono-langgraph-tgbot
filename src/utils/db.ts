@@ -1,20 +1,40 @@
-import { eq, notInArray, sql } from "drizzle-orm";
-import { getDB, type NewUser, schema, Token, User, users, tokenOHLCV } from "../db";
+import { eq, notInArray, sql, desc, and } from "drizzle-orm";
+import {
+  getDB,
+  type NewUser,
+  schema,
+  Token,
+  User,
+  users,
+  tokenOHLCV,
+  technicalAnalysis,
+  tradingSignals,
+  type NewTechnicalAnalysis,
+  type NewTradingSignal,
+  type TechnicalAnalysis,
+  type TokenOHLCV,
+  tokens,
+  NewToken,
+} from "../db";
 import { logger } from "./logger";
 
-const db = getDB();
-
 export const getTokens = async (): Promise<Token[]> => {
-  const allTokens = await db.query.tokens.findMany();
-  return allTokens;
+  const db = getDB();
+  return db.query.tokens.findMany();
+};
+
+export const createTokens = async (newTokens: NewToken[]): Promise<Token[]> => {
+  const db = getDB();
+  return db.insert(tokens).values(newTokens).returning();
 };
 
 export const getUsers = async (): Promise<User[]> => {
-  const allUsers = await db.query.users.findMany();
-  return allUsers;
+  const db = getDB();
+  return db.query.users.findMany();
 };
 
 export const getUserIds = async (excludeUserIds: string[] = []): Promise<string[]> => {
+  const db = getDB();
   const allUserIds = await db
     .select({ userId: users.userId })
     .from(users)
@@ -23,21 +43,25 @@ export const getUserIds = async (excludeUserIds: string[] = []): Promise<string[
 };
 
 export const getUserProfile = async (userId: string): Promise<User | null> => {
+  const db = getDB();
   const [user] = await db.select().from(users).where(eq(users.userId, userId));
   return user;
 };
 
 export const updateUserProfile = async (userId: string, profile: Partial<NewUser>): Promise<User | null> => {
+  const db = getDB();
   const [user] = await db.update(users).set(profile).where(eq(users.userId, userId)).returning();
   return user;
 };
 
 export const createUserProfile = async (profile: NewUser): Promise<User> => {
+  const db = getDB();
   const [user] = await db.insert(users).values(profile).returning();
   return user;
 };
 
 export const upsertUserProfile = async (profile: NewUser): Promise<User> => {
+  const db = getDB();
   const [user] = await db
     .insert(users)
     .values(profile)
@@ -50,8 +74,125 @@ export const upsertUserProfile = async (profile: NewUser): Promise<User> => {
 };
 
 export const getUserProfileByWalletAddress = async (walletAddress: string): Promise<User | null> => {
+  const db = getDB();
   const [user] = await db.select().from(users).where(eq(users.walletAddress, walletAddress));
   return user;
+};
+
+/**
+ * 指定したトークンの最新のOHLCVデータを指定期間分取得する
+ */
+export const getTokenOHLCV = async (tokenAddress: string, limit: number = 100): Promise<TokenOHLCV[]> => {
+  const db = getDB();
+  const data = await db
+    .select()
+    .from(tokenOHLCV)
+    .where(eq(tokenOHLCV.token, tokenAddress))
+    .orderBy(desc(tokenOHLCV.timestamp))
+    .limit(limit);
+
+  // 古い順にソート（計算用）
+  return data.reverse();
+};
+
+/**
+ * 指定したトークンの最新のテクニカル分析データを取得する
+ */
+export const getLatestTechnicalAnalysis = async (tokenAddress: string): Promise<TechnicalAnalysis | null> => {
+  const db = getDB();
+  const [latest] = await db
+    .select()
+    .from(technicalAnalysis)
+    .where(eq(technicalAnalysis.token, tokenAddress))
+    .orderBy(desc(technicalAnalysis.timestamp))
+    .limit(1);
+
+  return latest || null;
+};
+
+/**
+ * テクニカル分析データを保存する
+ */
+export const createTechnicalAnalysis = async (data: NewTechnicalAnalysis[]): Promise<void> => {
+  if (data.length === 0) return;
+
+  await batchUpsert(technicalAnalysis, data, {
+    conflictTarget: ["id"],
+    updateFields: [
+      "rsi",
+      "macd",
+      "macd_signal",
+      "macd_histogram",
+      "bb_upper",
+      "bb_middle",
+      "bb_lower",
+      "sma_20",
+      "sma_50",
+      "ema_12",
+      "ema_26",
+      "volume_sma",
+    ],
+    logContext: "saveTechnicalAnalysis",
+  });
+};
+
+/**
+ * 取引シグナルを保存する
+ */
+export const createTradingSignals = async (data: NewTradingSignal[]): Promise<void> => {
+  if (data.length === 0) return;
+
+  await batchUpsert(tradingSignals, data, {
+    conflictTarget: ["id"],
+    updateFields: ["signal_type", "indicator", "strength", "price", "message", "metadata"],
+    logContext: "saveTradingSignals",
+  });
+};
+
+/**
+ * 最新の重要なシグナルを取得する（過去24時間以内）
+ */
+export const getRecentImportantSignals = async (
+  sinceTimestamp?: number,
+): Promise<
+  Array<{
+    token: string;
+    signal_type: string;
+    indicator: string;
+    strength: string;
+    price: string;
+    message: string;
+    metadata: Record<string, any> | null;
+    timestamp: number;
+    tokenName?: string;
+    tokenSymbol?: string;
+  }>
+> => {
+  const twentyFourHoursAgo = sinceTimestamp || Math.floor(Date.now() / 1000) - 24 * 60 * 60;
+
+  // STRONGまたはMODERATEのシグナルのみを取得
+  const db = getDB();
+  const signals = await db
+    .select({
+      token: tradingSignals.token,
+      signal_type: tradingSignals.signal_type,
+      indicator: tradingSignals.indicator,
+      strength: tradingSignals.strength,
+      price: tradingSignals.price,
+      message: tradingSignals.message,
+      metadata: tradingSignals.metadata,
+      timestamp: tradingSignals.timestamp,
+    })
+    .from(tradingSignals)
+    .where(
+      and(
+        sql`${tradingSignals.timestamp} >= ${twentyFourHoursAgo}`,
+        sql`${tradingSignals.strength} IN ('STRONG', 'MODERATE')`,
+      ),
+    )
+    .orderBy(desc(tradingSignals.timestamp));
+
+  return signals;
 };
 
 // Drizzleテーブルからカラム名を抽出する型（keyofを使用してシンプルに）

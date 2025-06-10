@@ -105,8 +105,24 @@ describe("Vybe Network API Client - Integration Tests", () => {
         tokenKeys.forEach(mintAddress => {
           const tokenData = data[mintAddress];
           expect(tokenData).toBeDefined();
-          expect(tokenData.mintAddress).toBe(mintAddress);
-          expect(Array.isArray(tokenData.data)).toBe(true);
+          expect(Array.isArray(tokenData)).toBe(true);
+
+          // OHLCVデータが存在する場合、構造をチェック
+          if (tokenData.length > 0) {
+            const firstData = tokenData[0];
+            expect(firstData).toHaveProperty("time");
+            expect(firstData).toHaveProperty("open");
+            expect(firstData).toHaveProperty("high");
+            expect(firstData).toHaveProperty("low");
+            expect(firstData).toHaveProperty("close");
+            expect(firstData).toHaveProperty("volume");
+            expect(typeof firstData.time).toBe("number");
+            expect(typeof firstData.open).toBe("string");
+            expect(typeof firstData.high).toBe("string");
+            expect(typeof firstData.low).toBe("string");
+            expect(typeof firstData.close).toBe("string");
+            expect(typeof firstData.volume).toBe("string");
+          }
         });
       }
     }, 15000);

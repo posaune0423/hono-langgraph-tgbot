@@ -5,7 +5,7 @@ import { logger } from "../utils/logger";
 
 const route = new Hono();
 
-route.post("/webhook/telegram", async (c) => {
+route.post("/telegram", async (c) => {
   try {
     // Setup the bot
     const bot = setupTelegramBot();

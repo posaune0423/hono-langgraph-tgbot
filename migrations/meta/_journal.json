@@ -15,6 +15,13 @@
       "when": 1749530895729,
       "tag": "0001_grey_starjammers",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1749537387981,
+      "tag": "0002_opposite_whistler",
+      "breakpoints": true
     }
   ]
 }

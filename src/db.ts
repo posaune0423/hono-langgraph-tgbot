@@ -67,6 +67,44 @@ export const tokenOHLCV = pgTable(
   (table) => [primaryKey({ columns: [table.token, table.timestamp] })],
 );
 
+// Technical analysis results table
+export const technicalAnalysis = pgTable("technical_analysis", {
+  id: text("id").primaryKey().notNull(),
+  token: text("token")
+    .notNull()
+    .references(() => tokens.address),
+  timestamp: integer("timestamp").notNull(),
+  rsi: numeric("rsi"),
+  macd: numeric("macd"),
+  macd_signal: numeric("macd_signal"),
+  macd_histogram: numeric("macd_histogram"),
+  bb_upper: numeric("bb_upper"),
+  bb_middle: numeric("bb_middle"),
+  bb_lower: numeric("bb_lower"),
+  sma_20: numeric("sma_20"),
+  sma_50: numeric("sma_50"),
+  ema_12: numeric("ema_12"),
+  ema_26: numeric("ema_26"),
+  volume_sma: numeric("volume_sma"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Trading signals table
+export const tradingSignals = pgTable("trading_signals", {
+  id: text("id").primaryKey().notNull(),
+  token: text("token")
+    .notNull()
+    .references(() => tokens.address),
+  signal_type: text("signal_type").notNull(), // 'BUY', 'SELL', 'HOLD'
+  indicator: text("indicator").notNull(), // 'RSI', 'MACD', 'BB', 'SMA_CROSS', etc.
+  strength: text("strength").notNull(), // 'WEAK', 'MODERATE', 'STRONG'
+  price: numeric("price").notNull(),
+  message: text("message").notNull(),
+  metadata: json("metadata").$type<Record<string, any>>(),
+  timestamp: integer("timestamp").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 // Export types for use in other files
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
@@ -77,6 +115,11 @@ export type Token = typeof tokens.$inferSelect;
 export type NewToken = typeof tokens.$inferInsert;
 export type TokenOHLCV = typeof tokenOHLCV.$inferSelect;
 export type NewTokenOHLCV = typeof tokenOHLCV.$inferInsert;
+
+export type TechnicalAnalysis = typeof technicalAnalysis.$inferSelect;
+export type NewTechnicalAnalysis = typeof technicalAnalysis.$inferInsert;
+export type TradingSignal = typeof tradingSignals.$inferSelect;
+export type NewTradingSignal = typeof tradingSignals.$inferInsert;
 
 let dbInstance: ReturnType<typeof drizzle<typeof schema>> | null = null;
 
@@ -94,7 +137,7 @@ export function getDB() {
   return dbInstance;
 }
 
-const schema = { users, chatHistory, tokens, tokenOHLCV };
+const schema = { users, chatHistory, tokens, tokenOHLCV, technicalAnalysis, tradingSignals };
 
 // Export schema for external usage
 export { schema };
