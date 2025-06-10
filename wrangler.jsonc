@@ -7,6 +7,10 @@
   "triggers": {
     "crons": ["*/5 * * * *"],
   },
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1,
+  },
   // "vars": {
   //   "MY_VAR": "my-variable"
   // },
@@ -32,8 +36,4 @@
   // "ai": {
   //   "binding": "AI"
   // },
-  // "observability": {
-  //   "enabled": true,
-  //   "head_sampling_rate": 1
-  // }
 }
