@@ -17,6 +17,8 @@ app.use(
     allowHeaders: [
       "Content-Type",
       "Authorization",
+      "X-Custom-Header",
+      "Upgrade-Insecure-Requests",
       ADMIN_API_KEY_HEADER,
       "ngrok-skip-browser-warning", // Added for ngrok testing if needed
     ],

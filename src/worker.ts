@@ -6,8 +6,8 @@ export default {
   fetch: app.fetch,
   async scheduled(controller: ScheduledController) {
     switch (controller.cron) {
-      case "* * * * *":
-        // Every minute
+      case "*/5 * * * *":
+        // Every 5 minutes
         await runCronTasks();
         break;
       default:
