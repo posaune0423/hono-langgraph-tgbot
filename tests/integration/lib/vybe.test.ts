@@ -102,7 +102,7 @@ describe("Vybe Network API Client - Integration Tests", () => {
         expect(tokenKeys.length).toBeGreaterThan(0);
 
         // 各トークンのデータ構造をチェック
-        tokenKeys.forEach(mintAddress => {
+        tokenKeys.forEach((mintAddress) => {
           const tokenData = data[mintAddress];
           expect(tokenData).toBeDefined();
           expect(Array.isArray(tokenData)).toBe(true);

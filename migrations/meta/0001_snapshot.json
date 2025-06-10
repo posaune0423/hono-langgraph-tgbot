@@ -40,12 +40,8 @@
           "name": "chat_history_user_id_users_user_id_fk",
           "tableFrom": "chat_history",
           "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "user_id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["user_id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -109,12 +105,8 @@
           "name": "token_ohlcv_token_tokens_address_fk",
           "tableFrom": "token_ohlcv",
           "tableTo": "tokens",
-          "columnsFrom": [
-            "token"
-          ],
-          "columnsTo": [
-            "address"
-          ],
+          "columnsFrom": ["token"],
+          "columnsTo": ["address"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -122,10 +114,7 @@
       "compositePrimaryKeys": {
         "token_ohlcv_token_timestamp_pk": {
           "name": "token_ohlcv_token_timestamp_pk",
-          "columns": [
-            "token",
-            "timestamp"
-          ]
+          "columns": ["token", "timestamp"]
         }
       },
       "uniqueConstraints": {},
