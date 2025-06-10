@@ -1,6 +1,6 @@
 import { neon } from "@neondatabase/serverless";
 import { drizzle } from "drizzle-orm/neon-http";
-import { pgTable, text, integer, timestamp, json, boolean } from "drizzle-orm/pg-core";
+import { pgTable, text, integer, timestamp, json, boolean, numeric, primaryKey } from "drizzle-orm/pg-core";
 import { logger } from "./utils/logger";
 
 // Users table based on UserProfile interface
@@ -51,17 +51,21 @@ export const tokens = pgTable("tokens", {
   logoURI: text("logo_uri").notNull(),
 });
 
-export const tokenOHLCV = pgTable("token_ohlcv", {
-  token: text("token")
-    .notNull()
-    .references(() => tokens.address),
-  timestamp: timestamp("timestamp").defaultNow().notNull(),
-  open: integer("open").notNull(),
-  high: integer("high").notNull(),
-  low: integer("low").notNull(),
-  close: integer("close").notNull(),
-  volume: integer("volume").notNull(),
-});
+export const tokenOHLCV = pgTable(
+  "token_ohlcv",
+  {
+    token: text("token")
+      .notNull()
+      .references(() => tokens.address),
+    timestamp: integer("timestamp").notNull(), // UNIX timestamp in seconds
+    open: numeric("open").notNull(),
+    high: numeric("high").notNull(),
+    low: numeric("low").notNull(),
+    close: numeric("close").notNull(),
+    volume: numeric("volume").notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.token, table.timestamp] })],
+);
 
 // Export types for use in other files
 export type User = typeof users.$inferSelect;

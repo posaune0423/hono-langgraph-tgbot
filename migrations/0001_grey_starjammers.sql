@@ -1,0 +1,1 @@
+ALTER TABLE "token_ohlcv" ADD CONSTRAINT "token_ohlcv_token_timestamp_pk" PRIMARY KEY("token","timestamp");

@@ -5,12 +5,14 @@ import { logger } from "../utils/logger";
 import { isValidSolanaAddress } from "../utils/solana";
 
 export type VybeOHLCVData = {
-  date: string; // ISO date string
-  open: number;
-  high: number;
-  low: number;
-  close: number;
-  volume: number;
+  time: number; // UNIX timestamp (int64)
+  open: string; // float number string
+  high: string; // float number string
+  low: string; // float number string
+  close: string; // float number string
+  volume: string; // float number string
+  volumeUsd: string; // float number string
+  count: number;
 };
 
 export type VybeTokenOHLCVResponse = {
@@ -21,7 +23,7 @@ export type VybeTokenOHLCVResponse = {
 };
 
 // APIドキュメントに基づく有効なtimeframe値
-export type VybeTimeframe = "1h" | "4h" | "1d" | "1w";
+export type VybeTimeframe = "1m" | "3m" | "5m" | "15m" | "30m" | "1h" | "2h" | "3h" | "4h" | "1d" | "1w" | "1mo" | "1y";
 
 // エラー型の定義
 export type VybeAPIError = {
@@ -51,7 +53,7 @@ const authFetch = (url: string) => {
  */
 export const fetchTokenOHLCV = async (
   mintAddress: string,
-  resolution: VybeTimeframe = "1d",
+  resolution: VybeTimeframe = "5m",
   options?: {
     timeStart?: number; // UNIX timestamp (int64)
     timeEnd?: number; // UNIX timestamp (int64)
@@ -183,14 +185,14 @@ export const fetchTokenOHLCV = async (
  */
 export const fetchMultipleTokenOHLCV = async (
   mintAddresses: string[],
-  resolution: VybeTimeframe = "1d",
+  resolution: VybeTimeframe = "5m",
   options?: {
     timeStart?: number;
     timeEnd?: number;
     limit?: number;
     page?: number;
   },
-): Promise<Result<Record<string, VybeTokenOHLCVResponse>, VybeAPIError>> => {
+): Promise<Result<Record<string, VybeOHLCVData[]>, VybeAPIError>> => {
   // バリデーション
   if (!Array.isArray(mintAddresses) || mintAddresses.length === 0) {
     return err({
@@ -224,32 +226,26 @@ export const fetchMultipleTokenOHLCV = async (
       return { mintAddress, result };
     });
 
-    const results = await Promise.all(promises);
+    const results = await Promise.allSettled(promises);
 
     // 成功したデータのみを収集
-    const successfulResults: Record<string, VybeTokenOHLCVResponse> = {};
+    const successfulResults: Record<string, VybeOHLCVData[]> = {};
     const errors: Array<{ mintAddress: string; error: VybeAPIError }> = [];
 
-    results.forEach(({ mintAddress, result }) => {
-      if (result.isOk()) {
-        successfulResults[mintAddress] = result.value;
-      } else {
-        errors.push({ mintAddress, error: result.error });
-        logger.warn("vybe-api", `Failed to fetch OHLCV for ${mintAddress}`, result.error);
+    results.forEach((result) => {
+      if (result.status === "fulfilled") {
+        const { mintAddress, result: resultValue } = result.value;
+        if (resultValue.isOk()) {
+          successfulResults[mintAddress] = resultValue.value.data;
+        } else {
+          errors.push({ mintAddress, error: resultValue.error });
+          logger.warn("vybe-api", `Failed to fetch OHLCV for ${mintAddress}`, resultValue.error);
+        }
       }
     });
 
-    const successCount = Object.keys(successfulResults).length;
-    const errorCount = errors.length;
-
-    logger.info("vybe-api", `Completed batch OHLCV fetch`, {
-      total: uniqueAddresses.length,
-      successful: successCount,
-      failed: errorCount,
-    });
-
     // 一つも成功しなかった場合はエラーを返す
-    if (successCount === 0) {
+    if (Object.keys(successfulResults).length === 0) {
       return err({
         type: "api",
         message: `Failed to fetch OHLCV data for all ${uniqueAddresses.length} tokens`,
