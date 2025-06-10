@@ -15,7 +15,63 @@ route.use("*", adminAuth);
  */
 route.post("/send-message", async (c) => {
   try {
-    const body = (await c.req.json()) as AdminSendMessageRequest;
+    // Parse request body (support both JSON and form data)
+    const contentType = c.req.header("content-type") || "";
+    let body: AdminSendMessageRequest;
+
+    try {
+      if (contentType.includes("application/json")) {
+        // Parse JSON
+        body = (await c.req.json()) as AdminSendMessageRequest;
+      } else if (contentType.includes("multipart/form-data") || contentType.includes("application/x-www-form-urlencoded")) {
+        // Parse form data
+        const formData = await c.req.parseBody();
+        body = {
+          userId: formData.userId as string,
+          message: formData.message as string,
+          parseMode: formData.parseMode as ("HTML" | "Markdown" | "MarkdownV2" | undefined),
+        };
+      } else {
+        logger.warn("admin/send-message", "Unsupported Content-Type header", {
+          contentType,
+        });
+        return c.json(
+          {
+            success: false,
+            error: "Unsupported Content-Type",
+            details: "Please use 'application/json', 'multipart/form-data', or 'application/x-www-form-urlencoded'",
+          },
+          400,
+        );
+      }
+    } catch (parseError) {
+      logger.warn("admin/send-message", "Failed to parse request body", {
+        error: parseError instanceof Error ? parseError.message : "Unknown parse error",
+        contentType,
+      });
+      return c.json(
+        {
+          success: false,
+          error: "Failed to parse request body",
+          details: "Please ensure the request body is properly formatted",
+        },
+        400,
+      );
+    }
+
+    // Validate body is an object
+    if (!body || typeof body !== "object") {
+      logger.warn("admin/send-message", "Request body is not an object", {
+        bodyType: typeof body,
+      });
+      return c.json(
+        {
+          success: false,
+          error: "Request body must be an object",
+        },
+        400,
+      );
+    }
 
     // Early return for missing userId
     if (!body.userId) {
@@ -101,7 +157,65 @@ route.post("/send-message", async (c) => {
  */
 route.post("/broadcast", async (c) => {
   try {
-    const body = (await c.req.json()) as AdminBroadcastRequest;
+    // Parse request body (support both JSON and form data)
+    const contentType = c.req.header("content-type") || "";
+    let body: AdminBroadcastRequest;
+
+    try {
+      if (contentType.includes("application/json")) {
+        // Parse JSON
+        body = (await c.req.json()) as AdminBroadcastRequest;
+      } else if (contentType.includes("multipart/form-data") || contentType.includes("application/x-www-form-urlencoded")) {
+        // Parse form data
+        const formData = await c.req.parseBody();
+        body = {
+          message: formData.message as string,
+          parseMode: formData.parseMode as ("HTML" | "Markdown" | "MarkdownV2" | undefined),
+          excludeUserIds: formData.excludeUserIds ?
+            (formData.excludeUserIds as string).split(',').map(id => id.trim()).filter(id => id) :
+            undefined,
+        };
+      } else {
+        logger.warn("admin/broadcast", "Unsupported Content-Type header", {
+          contentType,
+        });
+        return c.json(
+          {
+            success: false,
+            error: "Unsupported Content-Type",
+            details: "Please use 'application/json', 'multipart/form-data', or 'application/x-www-form-urlencoded'",
+          },
+          400,
+        );
+      }
+    } catch (parseError) {
+      logger.warn("admin/broadcast", "Failed to parse request body", {
+        error: parseError instanceof Error ? parseError.message : "Unknown parse error",
+        contentType,
+      });
+      return c.json(
+        {
+          success: false,
+          error: "Failed to parse request body",
+          details: "Please ensure the request body is properly formatted",
+        },
+        400,
+      );
+    }
+
+    // Validate body is an object
+    if (!body || typeof body !== "object") {
+      logger.warn("admin/broadcast", "Request body is not an object", {
+        bodyType: typeof body,
+      });
+      return c.json(
+        {
+          success: false,
+          error: "Request body must be an object",
+        },
+        400,
+      );
+    }
 
     // Validate message
     const messageValidation = validateMessage(body.message);

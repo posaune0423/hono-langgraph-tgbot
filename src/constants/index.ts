@@ -1,4 +1,4 @@
-export const TIMEOUT_MS = 100 * 1000;
+export const TIMEOUT_MS = 100 * 1000; // 100 seconds
 export const TWITTER_HANDLE = "@DaikoAI";
 
 // Admin authentication

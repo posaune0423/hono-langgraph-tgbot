@@ -117,7 +117,10 @@ bun run deploy
 - `messageId` (Primary Key) - Message ID
 - `userId` (Foreign Key) - Reference to users table
 - `content` - Message content
+- `messageType` - Message type ('human' or 'ai')
 - `timestamp` - Message timestamp
+
+Chat history is now persisted in the Neon database, allowing conversations to continue across bot restarts. Users can clear their chat history using the `/clear` command.
 
 [For generating/synchronizing types based on your Worker configuration run](https://developers.cloudflare.com/workers/wrangler/commands/#types):
 

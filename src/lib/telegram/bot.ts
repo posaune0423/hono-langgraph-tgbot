@@ -2,7 +2,6 @@ import { Bot } from "grammy";
 import { setupHandler } from "./handler";
 import { setupCommands } from "./command";
 import { logger } from "../../utils/logger";
-import { getDB, users } from "../../db";
 import { ok, err, Result } from "neverthrow";
 import type {
   AdminSendMessageRequest,
@@ -11,9 +10,7 @@ import type {
   AdminBroadcastResponse,
   BroadcastResult,
   TelegramError,
-  DatabaseError,
   MessageSentResult,
-  UserListResult,
 } from "../../types";
 import { sleep } from "../../utils";
 import { getUserIds } from "../../utils/db";

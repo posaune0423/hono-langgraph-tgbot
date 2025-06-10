@@ -7,15 +7,16 @@ import { SetupStep } from "../../types";
 import { proceedToNextStep } from "./command";
 import { isValidSolanaAddress } from "../../utils/solana";
 import { dumpTokenUsage, isAnalyzerMessage, isGeneralistMessage } from "../../utils";
-import { getUserProfile, updateUserProfile } from "../../utils/db";
+import { getUserProfile, updateUserProfile, getChatHistory, saveChatMessage } from "../../utils/db";
 import { timeoutPromise } from "../../utils";
-
-// NOTE: In-memory chat history for session state
-const chatHistory = new Map();
 
 export const setupHandler = (bot: Bot) => {
   bot.on("message:text", async (ctx: Context) => {
     const userId = ctx.from?.id.toString();
+    const username = ctx.from?.username;
+    const firstName = ctx.from?.first_name;
+    const lastName = ctx.from?.last_name;
+
     if (!userId || !ctx.message?.text) {
       logger.warn("message handler", "User ID or message text is null");
       return;
@@ -42,6 +43,9 @@ export const setupHandler = (bot: Bot) => {
 
             await updateUserProfile(userId, {
               walletAddress: text,
+              username,
+              firstName,
+              lastName,
               waitingForInput: null,
             });
 
@@ -138,11 +142,12 @@ export const setupHandler = (bot: Bot) => {
       const { agent, config } = await initGraph(userId);
       logger.debug("message handler", "Initialized Graph");
 
-      if (!chatHistory.has(userId)) {
-        chatHistory.set(userId, []);
-      }
-      const userChatHistory = chatHistory.get(userId);
-      userChatHistory.push(new HumanMessage(ctx.message.text));
+      // Load chat history from database
+      const userChatHistory = await getChatHistory(userId);
+
+      // Add current user message to history
+      const currentUserMessage = new HumanMessage(ctx.message.text);
+      await saveChatMessage(userId, currentUserMessage);
 
       // analyzerまたはgeneralistのメッセージを格納する変数
       let latestAgentMessage: string | null = null;
@@ -150,7 +155,7 @@ export const setupHandler = (bot: Bot) => {
       // send user message to agent
       const stream = await agent.stream(
         {
-          messages: [new HumanMessage(ctx.message.text), ...userChatHistory],
+          messages: [...userChatHistory, currentUserMessage],
           userProfile: profile,
         },
         config,
@@ -184,7 +189,10 @@ export const setupHandler = (bot: Bot) => {
             await ctx.reply(latestAgentMessage, {
               parse_mode: "Markdown",
             });
-            userChatHistory.push(new AIMessage(latestAgentMessage));
+
+            // Save AI message to database
+            const aiMessage = new AIMessage(latestAgentMessage);
+            await saveChatMessage(userId, aiMessage);
           }
         }
       } catch (error: unknown) {

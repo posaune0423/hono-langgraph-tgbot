@@ -2,8 +2,9 @@ import type { Bot, Context } from "grammy";
 import { InlineKeyboard } from "grammy";
 import { welcomeMessage } from "./messageTemplates";
 import { SetupStep } from "../../types";
-import { getUserProfile, updateUserProfile, upsertUserProfile } from "../../utils/db";
+import { getUserProfile, updateUserProfile, upsertUserProfile, clearChatHistory } from "../../utils/db";
 import { NewUser } from "../../db";
+import { logger } from "../../utils/logger";
 
 export const setupCommands = (bot: Bot) => {
   bot.command("start", async (ctx) => {
@@ -119,6 +120,29 @@ export const setupCommands = (bot: Bot) => {
         parse_mode: "Markdown",
       },
     );
+  });
+
+  bot.command("clear", async (ctx) => {
+    const userId = ctx.from?.id.toString();
+
+    if (!userId) {
+      await ctx.reply("Could not retrieve user information. Please try again.", {
+        parse_mode: "Markdown",
+      });
+      return;
+    }
+
+    try {
+      await clearChatHistory(userId);
+      await ctx.reply("🗑️ Chat history has been cleared!", {
+        parse_mode: "Markdown",
+      });
+    } catch (error) {
+      logger.error("clear command", "Error clearing chat history:", error);
+      await ctx.reply("❌ Error clearing chat history. Please try again.", {
+        parse_mode: "Markdown",
+      });
+    }
   });
 };
 

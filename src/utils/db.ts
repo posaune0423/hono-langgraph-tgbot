@@ -15,8 +15,12 @@ import {
   type TokenOHLCV,
   tokens,
   NewToken,
+  chatHistory,
+  type ChatMessage,
+  type NewChatMessage,
 } from "../db";
 import { logger } from "./logger";
+import { HumanMessage, AIMessage, type BaseMessage } from "@langchain/core/messages";
 
 export const getTokens = async (): Promise<Token[]> => {
   const db = getDB();
@@ -193,6 +197,60 @@ export const getRecentImportantSignals = async (
     .orderBy(desc(tradingSignals.timestamp));
 
   return signals;
+};
+
+/**
+ * ユーザーのchat historyをデータベースから取得してBaseMessage[]に変換
+ */
+export const getChatHistory = async (userId: string, limit: number = 100): Promise<BaseMessage[]> => {
+  const db = getDB();
+  const messages = await db
+    .select()
+    .from(chatHistory)
+    .where(eq(chatHistory.userId, userId))
+    .orderBy(desc(chatHistory.timestamp))
+    .limit(limit);
+
+  // 時系列順にソート（古い順）
+  const sortedMessages = messages.reverse();
+
+  // BaseMessage[]に変換
+  return sortedMessages.map((msg) => {
+    if (msg.messageType === "human") {
+      return new HumanMessage(msg.content);
+    } else {
+      return new AIMessage(msg.content);
+    }
+  });
+};
+
+/**
+ * chat messageをデータベースに保存
+ */
+export const saveChatMessage = async (userId: string, message: BaseMessage): Promise<void> => {
+  const db = getDB();
+
+  const messageId = `${userId}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  const messageType = message instanceof HumanMessage ? "human" : "ai";
+
+  const newMessage: NewChatMessage = {
+    messageId,
+    userId,
+    content: message.content as string,
+    messageType,
+  };
+
+  await db.insert(chatHistory).values(newMessage);
+  logger.debug("saveChatMessage", `Saved ${messageType} message for user ${userId}`);
+};
+
+/**
+ * ユーザーのchat historyをクリア
+ */
+export const clearChatHistory = async (userId: string): Promise<void> => {
+  const db = getDB();
+  await db.delete(chatHistory).where(eq(chatHistory.userId, userId));
+  logger.info("clearChatHistory", `Cleared chat history for user ${userId}`);
 };
 
 // Drizzleテーブルからカラム名を抽出する型（keyofを使用してシンプルに）

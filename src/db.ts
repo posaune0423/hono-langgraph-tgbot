@@ -8,6 +8,9 @@ export const users = pgTable("users", {
   userId: text("user_id").primaryKey().notNull(), // Telegram user ID
   walletAddress: text("wallet_address").notNull(),
 
+  firstName: text("first_name"),
+  lastName: text("last_name"),
+  username: text("username"),
   // Demographics
   age: integer("age"),
 
@@ -40,6 +43,7 @@ export const chatHistory = pgTable("chat_history", {
     .notNull()
     .references(() => users.userId),
   content: text("content").notNull(),
+  messageType: text("message_type").notNull(), // 'human' or 'ai'
   timestamp: timestamp("timestamp").defaultNow().notNull(),
 });
 
