@@ -5,7 +5,7 @@ export const TWITTER_HANDLE = "@DaikoAI";
 export const ADMIN_API_KEY_HEADER = "X-Admin-API-Key";
 
 export const ALLOWED_ORIGINS = [
-  "https://a201b17d-hono-langgraph-tgbot.yamadaasuma.workers.dev",
-  "https://v0-telegram-bot-redesign-neon.vercel.app",
+  "https://v0-telegram-bot-redesign-4g.vercel.app",
+  "https://kzmnt3jp77rfzrl4mag7.lite.vusercontent.net",
   "http://localhost:3000",
 ];

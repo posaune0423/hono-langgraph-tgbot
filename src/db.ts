@@ -52,7 +52,7 @@ export const tokens = pgTable("tokens", {
   name: text("name").notNull(),
   symbol: text("symbol").notNull(),
   decimals: integer("decimals").notNull(),
-  logoURI: text("logo_uri").notNull(),
+  iconUrl: text("icon_url").notNull(),
 });
 
 export const tokenOHLCV = pgTable(
