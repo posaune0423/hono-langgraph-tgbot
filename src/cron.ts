@@ -3,22 +3,13 @@ import {
   getTokens,
   batchUpsert,
   getTokenOHLCV,
-  getLatestTechnicalAnalysis,
   createTechnicalAnalysis,
-  createTradingSignals,
   cleanupAllTokensOHLCVByCount,
 } from "./utils/db";
 import { fetchMultipleTokenOHLCV } from "./lib/vybe";
 import { getTACache } from "./lib/technicalAnalysisCache";
 import { tokenOHLCV } from "./db";
-import {
-  calculatePracticalIndicators,
-  convertPracticalToDbFormat,
-  generatePracticalSignals,
-  convertPracticalSignalToDbFormat,
-  type OHLCVData,
-  type PracticalAnalysisResult,
-} from "./lib/technicalAnalysis";
+import { calculateTechnicalIndicators, convertPracticalToDbFormat, type OHLCVData } from "./lib/technicalAnalysis";
 import { OHLCV_RETENTION } from "./constants/database";
 
 // every 5 minutes
@@ -103,7 +94,7 @@ const technicalAnalysisTask = async () => {
     }));
 
     // 実戦的テクニカル指標を計算
-    const analysis = calculatePracticalIndicators(numericData);
+    const analysis = calculateTechnicalIndicators(numericData);
     if (!analysis) {
       logger.info(`Failed to calculate practical indicators for ${token.symbol}`);
       return null;
@@ -113,9 +104,6 @@ const technicalAnalysisTask = async () => {
     const latestData = numericData[numericData.length - 1];
     const currentPrice = latestData.close;
     const currentTimestamp = latestData.timestamp;
-
-    // 実戦的シグナルを生成
-    const signals = generatePracticalSignals(analysis, currentPrice);
 
     // 6指標の詳細値をログ出力（デバッグ用）
     logger.debug(`6-Indicator Analysis for ${token.symbol}`, {
@@ -131,43 +119,12 @@ const technicalAnalysisTask = async () => {
       rsi: analysis.rsi?.toFixed(0),
     });
 
-    // 強いシグナルの詳細ログ出力
-    const strongSignals = signals.filter((s) => s.confidence >= 0.8);
-    if (strongSignals.length > 0) {
-      logger.info(`🚨 STRONG SIGNALS for ${token.symbol}`, {
-        token: token.symbol,
-        price: currentPrice.toFixed(6),
-        signalCount: strongSignals.length,
-        signals: strongSignals.map((s) => ({
-          action: s.action,
-          indicator: s.indicator,
-          confidence: s.confidence,
-          message: s.message,
-        })),
-      });
-    }
-
-    // 中程度のシグナルもログ出力
-    const moderateSignals = signals.filter((s) => s.confidence >= 0.6 && s.confidence < 0.8);
-    if (moderateSignals.length > 0) {
-      logger.info(`📊 Moderate signals for ${token.symbol}`, {
-        token: token.symbol,
-        signalCount: moderateSignals.length,
-        signals: moderateSignals.map((s) => ({
-          action: s.action,
-          indicator: s.indicator,
-          message: s.message,
-        })),
-      });
-    }
-
     // 分析結果をキャッシュに保存（次回実行時のため）
     cache.setCachedAnalysis(token.address, analysis, currentPrice, currentTimestamp);
 
     return {
       token,
       analysis,
-      signals,
       currentPrice,
       currentTimestamp,
     };
@@ -192,54 +149,12 @@ const technicalAnalysisTask = async () => {
     convertPracticalToDbFormat(result.token.address, result.currentTimestamp, result.analysis),
   );
 
-  // シグナルデータをデータベースに保存
-  const signalData = successfulResults.flatMap((result) =>
-    result.signals.map((signal) =>
-      convertPracticalSignalToDbFormat(result.token.address, result.currentTimestamp, result.currentPrice, signal),
-    ),
-  );
-
   if (analysisData.length === 0) {
     logger.error("No practical analysis data to save");
     return;
   }
 
   await createTechnicalAnalysis(analysisData);
-
-  // シグナルデータも保存
-  if (signalData.length > 0) {
-    await createTradingSignals(signalData);
-  }
-
-  logger.info(`✅ Saved ${analysisData.length} practical analysis records and ${signalData.length} trading signals`);
-
-  // 実用的なシグナル統計情報
-  const signalStats = {
-    total: signalData.length,
-    strong: signalData.filter((s) => s.strength === "STRONG").length,
-    moderate: signalData.filter((s) => s.strength === "MODERATE").length,
-    weak: signalData.filter((s) => s.strength === "WEAK").length,
-    actions: {
-      buy: signalData.filter((s) => s.signal_type === "BUY").length,
-      sellPart: signalData.filter((s) => s.signal_type === "SELL_PART").length,
-      sellAll: signalData.filter((s) => s.signal_type === "SELL_ALL").length,
-      buyPrep: signalData.filter((s) => s.signal_type === "BUY_PREP").length,
-      sellWarning: signalData.filter((s) => s.signal_type === "SELL_WARNING").length,
-      breakoutBuy: signalData.filter((s) => s.signal_type === "BREAKOUT_BUY").length,
-      reversalBuy: signalData.filter((s) => s.signal_type === "REVERSAL_BUY").length,
-    },
-  };
-
-  if (signalStats.total > 0) {
-    logger.info(`📈 Signal Statistics`, signalStats);
-  }
-
-  // 重要なアクションが検出された場合のアラート
-  if (signalStats.actions.sellAll > 0 || signalStats.actions.breakoutBuy > 0) {
-    logger.info(
-      `🚨 CRITICAL ACTIONS DETECTED: ${signalStats.actions.sellAll} SELL_ALL, ${signalStats.actions.breakoutBuy} BREAKOUT_BUY`,
-    );
-  }
 };
 
 /**

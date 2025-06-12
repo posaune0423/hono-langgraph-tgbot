@@ -9,7 +9,6 @@ import {
   ADX_CONFIG,
   RSI_CONFIG,
   TRADING_WORKFLOW_CONFIG,
-  TRADING_RULES,
   type TradingAction,
 } from "../constants/technicalAnalysis";
 
@@ -240,7 +239,7 @@ const calculateRSI9 = (closes: number[]): number | undefined => {
 /**
  * 6つの実用的指標を計算
  */
-export const calculatePracticalIndicators = (data: OHLCVData[]): PracticalAnalysisResult | null => {
+export const calculateTechnicalIndicators = (data: OHLCVData[]): PracticalAnalysisResult | null => {
   if (data.length < TRADING_WORKFLOW_CONFIG.minimumDataPoints) {
     logger.warn(`Insufficient data points: ${data.length} < ${TRADING_WORKFLOW_CONFIG.minimumDataPoints}`);
     return null;
@@ -288,126 +287,6 @@ export const calculatePracticalIndicators = (data: OHLCVData[]): PracticalAnalys
   } catch (error) {
     logger.error("Failed to calculate practical indicators", error);
     return null;
-  }
-};
-
-/**
- * 実用的なトレーディングシグナルを生成
- */
-export const generatePracticalSignals = (
-  analysis: PracticalAnalysisResult,
-  currentPrice: number,
-): PracticalSignalResult[] => {
-  const signals: PracticalSignalResult[] = [];
-
-  try {
-    // VWAP乖離率シグナル
-    if (analysis.vwapDeviation !== undefined) {
-      if (analysis.vwapDeviation >= TRADING_RULES.vwapDeviation.fullProfit) {
-        signals.push({
-          action: "SELL_ALL",
-          indicator: "VWAP",
-          confidence: 0.9,
-          message: `VWAP乖離率 +${analysis.vwapDeviation.toFixed(1)}% - 全利確検討`,
-          metadata: { vwapDeviation: analysis.vwapDeviation, threshold: TRADING_RULES.vwapDeviation.fullProfit },
-        });
-      } else if (analysis.vwapDeviation >= TRADING_RULES.vwapDeviation.partialProfit) {
-        signals.push({
-          action: "SELL_PART",
-          indicator: "VWAP",
-          confidence: 0.7,
-          message: `VWAP乖離率 +${analysis.vwapDeviation.toFixed(1)}% - 部分利確`,
-          metadata: { vwapDeviation: analysis.vwapDeviation, threshold: TRADING_RULES.vwapDeviation.partialProfit },
-        });
-      } else if (analysis.vwapDeviation <= TRADING_RULES.vwapDeviation.buyDip) {
-        signals.push({
-          action: "BUY",
-          indicator: "VWAP",
-          confidence: 0.6,
-          message: `VWAP乖離率 ${analysis.vwapDeviation.toFixed(1)}% - 押し目買い候補`,
-          metadata: { vwapDeviation: analysis.vwapDeviation, threshold: TRADING_RULES.vwapDeviation.buyDip },
-        });
-      }
-    }
-
-    // OBV z-scoreシグナル
-    if (analysis.obvZScore !== undefined) {
-      if (analysis.obvZScore >= TRADING_RULES.obvFlow.accumulationAlert) {
-        signals.push({
-          action: "BUY_PREP",
-          indicator: "OBV",
-          confidence: 0.8,
-          message: `OBV z-score +${analysis.obvZScore.toFixed(1)}σ - 仕込み期アラート`,
-          metadata: { obvZScore: analysis.obvZScore, threshold: TRADING_RULES.obvFlow.accumulationAlert },
-        });
-      } else if (analysis.obvZScore <= TRADING_RULES.obvFlow.distributionWarning) {
-        signals.push({
-          action: "SELL_WARNING",
-          indicator: "OBV",
-          confidence: 0.8,
-          message: `OBV z-score ${analysis.obvZScore.toFixed(1)}σ - 手仕舞い警告`,
-          metadata: { obvZScore: analysis.obvZScore, threshold: TRADING_RULES.obvFlow.distributionWarning },
-        });
-      }
-    }
-
-    // %B + ADXコンビネーションシグナル
-    if (analysis.percentB !== undefined && analysis.adx !== undefined) {
-      if (analysis.percentB > TRADING_RULES.percentB.breakoutBuy && analysis.adx > TRADING_RULES.adx.trendMode) {
-        signals.push({
-          action: "BREAKOUT_BUY",
-          indicator: "BB+ADX",
-          confidence: 0.9,
-          message: `%B=${analysis.percentB.toFixed(2)}, ADX=${analysis.adx.toFixed(0)} - ブレイクアウト買い`,
-          metadata: { percentB: analysis.percentB, adx: analysis.adx },
-        });
-      } else if (analysis.percentB < TRADING_RULES.percentB.reversalBuy && analysis.adx < TRADING_RULES.adx.rangeMode) {
-        signals.push({
-          action: "REVERSAL_BUY",
-          indicator: "BB+ADX",
-          confidence: 0.7,
-          message: `%B=${analysis.percentB.toFixed(2)}, ADX=${analysis.adx.toFixed(0)} - 逆張り買い`,
-          metadata: { percentB: analysis.percentB, adx: analysis.adx },
-        });
-      }
-    }
-
-    // ATR%高ボラティリティ警告
-    if (analysis.atrPercent !== undefined && analysis.atrPercent >= ATR_PERCENT_CONFIG.highVolatilityThreshold) {
-      signals.push({
-        action: "HOLD",
-        indicator: "ATR",
-        confidence: 0.6,
-        message: `ATR ${analysis.atrPercent.toFixed(1)}% - 高ボラティリティ警告`,
-        metadata: { atrPercent: analysis.atrPercent, threshold: ATR_PERCENT_CONFIG.highVolatilityThreshold },
-      });
-    }
-
-    // RSI逆張りシグナル（レンジ相場時のみ）
-    if (analysis.rsi !== undefined && analysis.adx !== undefined && analysis.adx < TRADING_RULES.adx.rangeMode) {
-      if (analysis.rsi >= TRADING_RULES.rsi.overbought) {
-        signals.push({
-          action: "SELL_PART",
-          indicator: "RSI",
-          confidence: 0.5,
-          message: `RSI ${analysis.rsi.toFixed(0)} - 買われすぎ（レンジ相場）`,
-          metadata: { rsi: analysis.rsi, adx: analysis.adx },
-        });
-      } else if (analysis.rsi <= TRADING_RULES.rsi.oversold) {
-        signals.push({
-          action: "BUY",
-          indicator: "RSI",
-          confidence: 0.5,
-          message: `RSI ${analysis.rsi.toFixed(0)} - 売られすぎ（レンジ相場）`,
-          metadata: { rsi: analysis.rsi, adx: analysis.adx },
-        });
-      }
-    }
-
-    return signals;
-  } catch (error) {
-    logger.error("Failed to generate practical signals", error);
-    return [];
   }
 };
 
