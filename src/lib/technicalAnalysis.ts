@@ -1,13 +1,16 @@
-import { RSI, MACD, BollingerBands, SMA, EMA } from "technicalindicators";
+import { RSI, ATR, ADX, BollingerBands, VWAP, OBV } from "technicalindicators";
 import { logger } from "../utils/logger";
 import { generateId } from "../utils/id";
 import type { NewTechnicalAnalysis, NewTradingSignal } from "../db";
 import {
+  OBV_ZSCORE_CONFIG,
+  PERCENT_B_CONFIG,
+  ATR_PERCENT_CONFIG,
+  ADX_CONFIG,
   RSI_CONFIG,
-  MACD_CONFIG,
-  BOLLINGER_BANDS_CONFIG,
-  MOVING_AVERAGE_CONFIG,
-  TECHNICAL_ANALYSIS_CONFIG,
+  TRADING_WORKFLOW_CONFIG,
+  TRADING_RULES,
+  type TradingAction,
 } from "../constants/technicalAnalysis";
 
 export type OHLCVData = {
@@ -19,39 +22,214 @@ export type OHLCVData = {
   volume: number;
 };
 
-export type AnalysisResult = {
-  rsi?: number;
-  macd?: {
-    macd: number;
-    signal: number;
-    histogram: number;
-  };
-  bollingerBands?: {
-    upper: number;
-    middle: number;
-    lower: number;
-  };
-  sma20?: number;
-  sma50?: number;
-  ema12?: number;
-  ema26?: number;
-  volumeSma?: number;
+export type PracticalAnalysisResult = {
+  vwap?: number;
+  vwapDeviation?: number; // VWAP乖離率 (%)
+  obv?: number;
+  obvZScore?: number; // OBV z-score (Δσ)
+  percentB?: number; // %B (BB内位置 0-1)
+  bbWidth?: number; // BB幅
+  atr?: number;
+  atrPercent?: number; // ATR% (ATR/close * 100)
+  adx?: number;
+  adxDirection?: "UP" | "DOWN" | "NEUTRAL";
+  rsi?: number; // RSI (9期間)
 };
 
-export type SignalResult = {
-  type: "BUY" | "SELL" | "HOLD";
+export type PracticalSignalResult = {
+  action: TradingAction;
   indicator: string;
-  strength: "WEAK" | "MODERATE" | "STRONG";
+  confidence: number; // 0-1 の信頼度
   message: string;
   metadata: Record<string, any>;
 };
 
 /**
- * RSI指標を計算する
+ * VWAP（Volume Weighted Average Price）をtechnicalindicatorsライブラリで計算
  */
-const calculateRSI = (closes: number[]): number | undefined => {
+export const calculateVWAP = (data: OHLCVData[]): number | undefined => {
   try {
-    const rsiResult = RSI.calculate({ values: closes, period: RSI_CONFIG.period });
+    if (data.length === 0) return undefined;
+
+    const vwapResult = VWAP.calculate({
+      high: data.map((d) => d.high),
+      low: data.map((d) => d.low),
+      close: data.map((d) => d.close),
+      volume: data.map((d) => d.volume),
+    });
+
+    return vwapResult[vwapResult.length - 1];
+  } catch (error) {
+    logger.error("Failed to calculate VWAP", error);
+    return undefined;
+  }
+};
+
+/**
+ * VWAP乖離率（%）を計算
+ */
+const calculateVWAPDeviation = (currentPrice: number, vwap: number): number => {
+  return ((currentPrice - vwap) / vwap) * 100;
+};
+
+/**
+ * OBV（On Balance Volume）をtechnicalindicatorsライブラリで計算
+ */
+export const calculateOBV = (data: OHLCVData[]): number | undefined => {
+  try {
+    if (data.length < 2) return undefined;
+
+    const obvResult = OBV.calculate({
+      close: data.map((d) => d.close),
+      volume: data.map((d) => d.volume),
+    });
+
+    return obvResult[obvResult.length - 1];
+  } catch (error) {
+    logger.error("Failed to calculate OBV", error);
+    return undefined;
+  }
+};
+
+/**
+ * OBVの全履歴を計算（z-score算出用）- technicalindicatorsライブラリ使用
+ */
+const calculateOBVHistory = (data: OHLCVData[]): number[] => {
+  if (data.length < 2) return [];
+
+  try {
+    const obvResult = OBV.calculate({
+      close: data.map((d) => d.close),
+      volume: data.map((d) => d.volume),
+    });
+
+    return obvResult;
+  } catch (error) {
+    logger.error("Failed to calculate OBV history", error);
+    return [];
+  }
+};
+
+/**
+ * OBVのz-score（Δσ）を計算
+ */
+const calculateOBVZScore = (obvHistory: number[]): number | undefined => {
+  if (obvHistory.length < OBV_ZSCORE_CONFIG.period) return undefined;
+
+  try {
+    const recentValues = obvHistory.slice(-OBV_ZSCORE_CONFIG.period);
+    const mean = recentValues.reduce((sum, val) => sum + val, 0) / recentValues.length;
+    const variance = recentValues.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / recentValues.length;
+    const stdDev = Math.sqrt(variance);
+
+    if (stdDev === 0) return 0;
+
+    const currentOBV = obvHistory[obvHistory.length - 1];
+    return (currentOBV - mean) / stdDev;
+  } catch (error) {
+    logger.error("Failed to calculate OBV z-score", error);
+    return undefined;
+  }
+};
+
+/**
+ * %B（Bollinger Bands内での位置）を計算
+ * %B = (Price - Lower Band) / (Upper Band - Lower Band)
+ */
+const calculatePercentB = (data: OHLCVData[]): { percentB?: number; bbWidth?: number } => {
+  try {
+    const closes = data.map((d) => d.close);
+    const bbResult = BollingerBands.calculate({
+      values: closes,
+      period: PERCENT_B_CONFIG.period,
+      stdDev: PERCENT_B_CONFIG.stdDev,
+    });
+
+    const bb = bbResult[bbResult.length - 1];
+    if (!bb) return {};
+
+    const currentPrice = closes[closes.length - 1];
+    const percentB = (currentPrice - bb.lower) / (bb.upper - bb.lower);
+    const bbWidth = (bb.upper - bb.lower) / bb.middle;
+
+    return { percentB, bbWidth };
+  } catch (error) {
+    logger.error("Failed to calculate %B", error);
+    return {};
+  }
+};
+
+/**
+ * ATR（Average True Range）を計算
+ */
+const calculateATR = (data: OHLCVData[]): number | undefined => {
+  try {
+    const atrResult = ATR.calculate({
+      high: data.map((d) => d.high),
+      low: data.map((d) => d.low),
+      close: data.map((d) => d.close),
+      period: ATR_PERCENT_CONFIG.period,
+    });
+
+    return atrResult[atrResult.length - 1];
+  } catch (error) {
+    logger.error("Failed to calculate ATR", error);
+    return undefined;
+  }
+};
+
+/**
+ * ATR%（ATR/close * 100）を計算
+ */
+const calculateATRPercent = (atr: number, currentPrice: number): number => {
+  return (atr / currentPrice) * 100;
+};
+
+/**
+ * ADX（Average Directional Index）を計算
+ */
+const calculateADX = (data: OHLCVData[]): { adx?: number; direction?: "UP" | "DOWN" | "NEUTRAL" } => {
+  try {
+    const adxResult = ADX.calculate({
+      high: data.map((d) => d.high),
+      low: data.map((d) => d.low),
+      close: data.map((d) => d.close),
+      period: ADX_CONFIG.period,
+    });
+
+    const adxValue = adxResult[adxResult.length - 1];
+    if (!adxValue) return {};
+
+    // ADXの結果を数値に変換
+    const adxNumber = typeof adxValue === "number" ? adxValue : adxValue.adx;
+
+    // ADX direction determination (simplified)
+    const recentCloses = data.slice(-3).map((d) => d.close);
+    let direction: "UP" | "DOWN" | "NEUTRAL" = "NEUTRAL";
+
+    if (recentCloses.length >= 3) {
+      const trend = recentCloses[2] - recentCloses[0];
+      if (trend > 0) direction = "UP";
+      else if (trend < 0) direction = "DOWN";
+    }
+
+    return { adx: adxNumber, direction };
+  } catch (error) {
+    logger.error("Failed to calculate ADX", error);
+    return {};
+  }
+};
+
+/**
+ * RSI（9期間）を計算
+ */
+const calculateRSI9 = (closes: number[]): number | undefined => {
+  try {
+    const rsiResult = RSI.calculate({
+      values: closes,
+      period: RSI_CONFIG.period,
+    });
+
     return rsiResult[rsiResult.length - 1];
   } catch (error) {
     logger.error("Failed to calculate RSI", error);
@@ -60,169 +238,220 @@ const calculateRSI = (closes: number[]): number | undefined => {
 };
 
 /**
- * MACD指標を計算する
+ * 6つの実用的指標を計算
  */
-const calculateMACD = (closes: number[]): AnalysisResult["macd"] => {
-  try {
-    const macdResult = MACD.calculate({
-      values: closes,
-      fastPeriod: MACD_CONFIG.fastPeriod,
-      slowPeriod: MACD_CONFIG.slowPeriod,
-      signalPeriod: MACD_CONFIG.signalPeriod,
-      SimpleMAOscillator: false,
-      SimpleMASignal: false,
-    });
-    const macd = macdResult[macdResult.length - 1];
-
-    return macd && macd.MACD !== undefined && macd.signal !== undefined && macd.histogram !== undefined
-      ? {
-          macd: macd.MACD,
-          signal: macd.signal,
-          histogram: macd.histogram,
-        }
-      : undefined;
-  } catch (error) {
-    logger.error("Failed to calculate MACD", error);
-    return undefined;
-  }
-};
-
-/**
- * Bollinger Bands指標を計算する
- */
-const calculateBollingerBands = (closes: number[]): AnalysisResult["bollingerBands"] => {
-  try {
-    const bbResult = BollingerBands.calculate({
-      values: closes,
-      period: BOLLINGER_BANDS_CONFIG.period,
-      stdDev: BOLLINGER_BANDS_CONFIG.stdDev,
-    });
-    const bb = bbResult[bbResult.length - 1];
-
-    return bb && bb.upper !== undefined && bb.middle !== undefined && bb.lower !== undefined
-      ? {
-          upper: bb.upper,
-          middle: bb.middle,
-          lower: bb.lower,
-        }
-      : undefined;
-  } catch (error) {
-    logger.error("Failed to calculate Bollinger Bands", error);
-    return undefined;
-  }
-};
-
-/**
- * 移動平均線（SMA）を計算する
- */
-const calculateSMA = (closes: number[], period: number): number | undefined => {
-  try {
-    const smaResult = SMA.calculate({ values: closes, period });
-    return smaResult[smaResult.length - 1];
-  } catch (error) {
-    logger.error(`Failed to calculate SMA${period}`, error);
-    return undefined;
-  }
-};
-
-/**
- * 指数移動平均線（EMA）を計算する
- */
-const calculateEMA = (closes: number[], period: number): number | undefined => {
-  try {
-    const emaResult = EMA.calculate({ values: closes, period });
-    return emaResult[emaResult.length - 1];
-  } catch (error) {
-    logger.error(`Failed to calculate EMA${period}`, error);
-    return undefined;
-  }
-};
-
-/**
- * 出来高移動平均を計算する
- */
-const calculateVolumeSMA = (volumes: number[]): number | undefined => {
-  try {
-    const volumeSmaResult = SMA.calculate({ values: volumes, period: MOVING_AVERAGE_CONFIG.volumePeriod });
-    return volumeSmaResult[volumeSmaResult.length - 1];
-  } catch (error) {
-    logger.error("Failed to calculate Volume SMA", error);
-    return undefined;
-  }
-};
-
-/**
- * OHLCVデータからテクニカル指標を計算する
- */
-export const calculateTechnicalIndicators = (data: OHLCVData[]): AnalysisResult | null => {
-  if (data.length < TECHNICAL_ANALYSIS_CONFIG.minimumDataPoints) {
-    logger.warn("Insufficient data for technical analysis", {
-      dataLength: data.length,
-      minimumRequired: TECHNICAL_ANALYSIS_CONFIG.minimumDataPoints,
-    });
+export const calculatePracticalIndicators = (data: OHLCVData[]): PracticalAnalysisResult | null => {
+  if (data.length < TRADING_WORKFLOW_CONFIG.minimumDataPoints) {
+    logger.warn(`Insufficient data points: ${data.length} < ${TRADING_WORKFLOW_CONFIG.minimumDataPoints}`);
     return null;
   }
 
-  const closes = data.map((d) => d.close);
-  const highs = data.map((d) => d.high);
-  const lows = data.map((d) => d.low);
-  const volumes = data.map((d) => d.volume);
-
   try {
+    const currentPrice = data[data.length - 1].close;
+    const closes = data.map((d) => d.close);
+
+    // 1. VWAP & VWAP乖離率
+    const vwap = calculateVWAP(data);
+    const vwapDeviation = vwap ? calculateVWAPDeviation(currentPrice, vwap) : undefined;
+
+    // 2. OBV & OBV z-score
+    const obvHistory = calculateOBVHistory(data);
+    const obv = obvHistory.length > 0 ? obvHistory[obvHistory.length - 1] : undefined;
+    const obvZScore = calculateOBVZScore(obvHistory);
+
+    // 3. %B (Bollinger Bands position)
+    const { percentB, bbWidth } = calculatePercentB(data);
+
+    // 4. ATR & ATR%
+    const atr = calculateATR(data);
+    const atrPercent = atr ? calculateATRPercent(atr, currentPrice) : undefined;
+
+    // 5. ADX & Direction
+    const { adx, direction: adxDirection } = calculateADX(data);
+
+    // 6. RSI (9)
+    const rsi = calculateRSI9(closes);
+
     return {
-      rsi: calculateRSI(closes),
-      macd: calculateMACD(closes),
-      bollingerBands: calculateBollingerBands(closes),
-      sma20: calculateSMA(closes, MOVING_AVERAGE_CONFIG.shortSmaPeriod),
-      sma50: calculateSMA(closes, MOVING_AVERAGE_CONFIG.longSmaPeriod),
-      ema12: calculateEMA(closes, MOVING_AVERAGE_CONFIG.shortEmaPeriod),
-      ema26: calculateEMA(closes, MOVING_AVERAGE_CONFIG.longEmaPeriod),
-      volumeSma: calculateVolumeSMA(volumes),
+      vwap,
+      vwapDeviation,
+      obv,
+      obvZScore,
+      percentB,
+      bbWidth,
+      atr,
+      atrPercent,
+      adx,
+      adxDirection,
+      rsi,
     };
   } catch (error) {
-    logger.error("technicalAnalysis", "Error calculating technical indicators", error);
+    logger.error("Failed to calculate practical indicators", error);
     return null;
   }
 };
 
 /**
- * テクニカル分析結果をデータベース形式に変換する
+ * 実用的なトレーディングシグナルを生成
  */
-export const convertToDbFormat = (token: string, timestamp: number, analysis: AnalysisResult): NewTechnicalAnalysis => {
+export const generatePracticalSignals = (
+  analysis: PracticalAnalysisResult,
+  currentPrice: number,
+): PracticalSignalResult[] => {
+  const signals: PracticalSignalResult[] = [];
+
+  try {
+    // VWAP乖離率シグナル
+    if (analysis.vwapDeviation !== undefined) {
+      if (analysis.vwapDeviation >= TRADING_RULES.vwapDeviation.fullProfit) {
+        signals.push({
+          action: "SELL_ALL",
+          indicator: "VWAP",
+          confidence: 0.9,
+          message: `VWAP乖離率 +${analysis.vwapDeviation.toFixed(1)}% - 全利確検討`,
+          metadata: { vwapDeviation: analysis.vwapDeviation, threshold: TRADING_RULES.vwapDeviation.fullProfit },
+        });
+      } else if (analysis.vwapDeviation >= TRADING_RULES.vwapDeviation.partialProfit) {
+        signals.push({
+          action: "SELL_PART",
+          indicator: "VWAP",
+          confidence: 0.7,
+          message: `VWAP乖離率 +${analysis.vwapDeviation.toFixed(1)}% - 部分利確`,
+          metadata: { vwapDeviation: analysis.vwapDeviation, threshold: TRADING_RULES.vwapDeviation.partialProfit },
+        });
+      } else if (analysis.vwapDeviation <= TRADING_RULES.vwapDeviation.buyDip) {
+        signals.push({
+          action: "BUY",
+          indicator: "VWAP",
+          confidence: 0.6,
+          message: `VWAP乖離率 ${analysis.vwapDeviation.toFixed(1)}% - 押し目買い候補`,
+          metadata: { vwapDeviation: analysis.vwapDeviation, threshold: TRADING_RULES.vwapDeviation.buyDip },
+        });
+      }
+    }
+
+    // OBV z-scoreシグナル
+    if (analysis.obvZScore !== undefined) {
+      if (analysis.obvZScore >= TRADING_RULES.obvFlow.accumulationAlert) {
+        signals.push({
+          action: "BUY_PREP",
+          indicator: "OBV",
+          confidence: 0.8,
+          message: `OBV z-score +${analysis.obvZScore.toFixed(1)}σ - 仕込み期アラート`,
+          metadata: { obvZScore: analysis.obvZScore, threshold: TRADING_RULES.obvFlow.accumulationAlert },
+        });
+      } else if (analysis.obvZScore <= TRADING_RULES.obvFlow.distributionWarning) {
+        signals.push({
+          action: "SELL_WARNING",
+          indicator: "OBV",
+          confidence: 0.8,
+          message: `OBV z-score ${analysis.obvZScore.toFixed(1)}σ - 手仕舞い警告`,
+          metadata: { obvZScore: analysis.obvZScore, threshold: TRADING_RULES.obvFlow.distributionWarning },
+        });
+      }
+    }
+
+    // %B + ADXコンビネーションシグナル
+    if (analysis.percentB !== undefined && analysis.adx !== undefined) {
+      if (analysis.percentB > TRADING_RULES.percentB.breakoutBuy && analysis.adx > TRADING_RULES.adx.trendMode) {
+        signals.push({
+          action: "BREAKOUT_BUY",
+          indicator: "BB+ADX",
+          confidence: 0.9,
+          message: `%B=${analysis.percentB.toFixed(2)}, ADX=${analysis.adx.toFixed(0)} - ブレイクアウト買い`,
+          metadata: { percentB: analysis.percentB, adx: analysis.adx },
+        });
+      } else if (analysis.percentB < TRADING_RULES.percentB.reversalBuy && analysis.adx < TRADING_RULES.adx.rangeMode) {
+        signals.push({
+          action: "REVERSAL_BUY",
+          indicator: "BB+ADX",
+          confidence: 0.7,
+          message: `%B=${analysis.percentB.toFixed(2)}, ADX=${analysis.adx.toFixed(0)} - 逆張り買い`,
+          metadata: { percentB: analysis.percentB, adx: analysis.adx },
+        });
+      }
+    }
+
+    // ATR%高ボラティリティ警告
+    if (analysis.atrPercent !== undefined && analysis.atrPercent >= ATR_PERCENT_CONFIG.highVolatilityThreshold) {
+      signals.push({
+        action: "HOLD",
+        indicator: "ATR",
+        confidence: 0.6,
+        message: `ATR ${analysis.atrPercent.toFixed(1)}% - 高ボラティリティ警告`,
+        metadata: { atrPercent: analysis.atrPercent, threshold: ATR_PERCENT_CONFIG.highVolatilityThreshold },
+      });
+    }
+
+    // RSI逆張りシグナル（レンジ相場時のみ）
+    if (analysis.rsi !== undefined && analysis.adx !== undefined && analysis.adx < TRADING_RULES.adx.rangeMode) {
+      if (analysis.rsi >= TRADING_RULES.rsi.overbought) {
+        signals.push({
+          action: "SELL_PART",
+          indicator: "RSI",
+          confidence: 0.5,
+          message: `RSI ${analysis.rsi.toFixed(0)} - 買われすぎ（レンジ相場）`,
+          metadata: { rsi: analysis.rsi, adx: analysis.adx },
+        });
+      } else if (analysis.rsi <= TRADING_RULES.rsi.oversold) {
+        signals.push({
+          action: "BUY",
+          indicator: "RSI",
+          confidence: 0.5,
+          message: `RSI ${analysis.rsi.toFixed(0)} - 売られすぎ（レンジ相場）`,
+          metadata: { rsi: analysis.rsi, adx: analysis.adx },
+        });
+      }
+    }
+
+    return signals;
+  } catch (error) {
+    logger.error("Failed to generate practical signals", error);
+    return [];
+  }
+};
+
+/**
+ * 分析結果をDB形式に変換
+ */
+export const convertPracticalToDbFormat = (
+  token: string,
+  timestamp: number,
+  analysis: PracticalAnalysisResult,
+): NewTechnicalAnalysis => {
   return {
     id: generateId(),
     token,
     timestamp,
+    vwap: analysis.vwap?.toString(),
+    vwap_deviation: analysis.vwapDeviation?.toString(),
+    obv: analysis.obv?.toString(),
+    obv_zscore: analysis.obvZScore?.toString(),
+    percent_b: analysis.percentB?.toString(),
+    bb_width: analysis.bbWidth?.toString(),
+    atr: analysis.atr?.toString(),
+    atr_percent: analysis.atrPercent?.toString(),
+    adx: analysis.adx?.toString(),
+    adx_direction: analysis.adxDirection,
     rsi: analysis.rsi?.toString(),
-    macd: analysis.macd?.macd.toString(),
-    macd_signal: analysis.macd?.signal.toString(),
-    macd_histogram: analysis.macd?.histogram.toString(),
-    bb_upper: analysis.bollingerBands?.upper.toString(),
-    bb_middle: analysis.bollingerBands?.middle.toString(),
-    bb_lower: analysis.bollingerBands?.lower.toString(),
-    sma_20: analysis.sma20?.toString(),
-    sma_50: analysis.sma50?.toString(),
-    ema_12: analysis.ema12?.toString(),
-    ema_26: analysis.ema26?.toString(),
-    volume_sma: analysis.volumeSma?.toString(),
   };
 };
 
 /**
- * シグナルをデータベース形式に変換する
+ * シグナルをDB形式に変換
  */
-export const convertSignalToDbFormat = (
+export const convertPracticalSignalToDbFormat = (
   token: string,
   timestamp: number,
   price: number,
-  signal: SignalResult,
+  signal: PracticalSignalResult,
 ): NewTradingSignal => {
   return {
     id: generateId(),
     token,
-    signal_type: signal.type,
+    signal_type: signal.action,
     indicator: signal.indicator,
-    strength: signal.strength,
+    strength: signal.confidence >= 0.8 ? "STRONG" : signal.confidence >= 0.6 ? "MODERATE" : "WEAK",
     price: price.toString(),
     message: signal.message,
     metadata: signal.metadata,

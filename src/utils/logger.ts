@@ -9,6 +9,9 @@ export const logger = {
   info: (...args: any[]) => {
     console.info(`[${getTimestamp()}]`, ...args);
   },
+  debug: (...args: any[]) => {
+    console.debug(`[${getTimestamp()}]`, ...args);
+  },
   warn: (...args: any[]) => {
     console.warn(`[${getTimestamp()}]`, ...args);
   },

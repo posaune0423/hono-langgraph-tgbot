@@ -133,18 +133,17 @@ export const createTechnicalAnalysis = async (data: NewTechnicalAnalysis[]): Pro
   await batchUpsert(technicalAnalysis, data, {
     conflictTarget: ["id"],
     updateFields: [
+      "vwap",
+      "vwap_deviation",
+      "obv",
+      "obv_zscore",
+      "percent_b",
+      "bb_width",
+      "atr",
+      "atr_percent",
+      "adx",
+      "adx_direction",
       "rsi",
-      "macd",
-      "macd_signal",
-      "macd_histogram",
-      "bb_upper",
-      "bb_middle",
-      "bb_lower",
-      "sma_20",
-      "sma_50",
-      "ema_12",
-      "ema_26",
-      "volume_sma",
     ],
   });
 };

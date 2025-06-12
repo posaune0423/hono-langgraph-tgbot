@@ -1,2 +1,0 @@
-CREATE INDEX "token_ohlcv_token_timestamp_idx" ON "token_ohlcv" USING btree ("token","timestamp" DESC NULLS LAST);--> statement-breakpoint
-CREATE INDEX "token_ohlcv_timestamp_idx" ON "token_ohlcv" USING btree ("timestamp" DESC NULLS LAST);

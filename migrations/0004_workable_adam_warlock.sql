@@ -1,1 +1,0 @@
-ALTER TABLE "chat_history" ADD COLUMN "message_type" text NOT NULL;

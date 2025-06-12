@@ -83,18 +83,20 @@ export const technicalAnalysis = pgTable("technical_analysis", {
     .notNull()
     .references(() => tokens.address),
   timestamp: integer("timestamp").notNull(),
-  rsi: numeric("rsi"),
-  macd: numeric("macd"),
-  macd_signal: numeric("macd_signal"),
-  macd_histogram: numeric("macd_histogram"),
-  bb_upper: numeric("bb_upper"),
-  bb_middle: numeric("bb_middle"),
-  bb_lower: numeric("bb_lower"),
-  sma_20: numeric("sma_20"),
-  sma_50: numeric("sma_50"),
-  ema_12: numeric("ema_12"),
-  ema_26: numeric("ema_26"),
-  volume_sma: numeric("volume_sma"),
+
+  // 実戦レベルのTA指標
+  vwap: numeric("vwap"), // VWAP価格
+  vwap_deviation: numeric("vwap_deviation"), // VWAP乖離率 (%)
+  obv: numeric("obv"), // OBV (On Balance Volume)
+  obv_zscore: numeric("obv_zscore"), // OBV z-score (Δσ)
+  percent_b: numeric("percent_b"), // %B (BB内位置 0-1)
+  bb_width: numeric("bb_width"), // BB幅（ボラティリティ参考）
+  atr: numeric("atr"), // ATR (Average True Range)
+  atr_percent: numeric("atr_percent"), // ATR% (ATR/close * 100)
+  adx: numeric("adx"), // ADX (Average Directional Index)
+  adx_direction: text("adx_direction"), // 'UP', 'DOWN', 'NEUTRAL'
+  rsi: numeric("rsi"), // RSI (9期間)
+
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

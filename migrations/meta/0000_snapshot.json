@@ -1,5 +1,5 @@
 {
-  "id": "0e74889c-843a-4e73-b77b-8a921afcf51c",
+  "id": "837835ad-b1d9-4dee-8b1d-47f5e56410cd",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -26,6 +26,12 @@
           "primaryKey": false,
           "notNull": true
         },
+        "message_type": {
+          "name": "message_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
         "timestamp": {
           "name": "timestamp",
           "type": "timestamp",
@@ -42,6 +48,120 @@
           "tableTo": "users",
           "columnsFrom": ["user_id"],
           "columnsTo": ["user_id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.technical_analysis": {
+      "name": "technical_analysis",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "token": {
+          "name": "token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "timestamp": {
+          "name": "timestamp",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "vwap": {
+          "name": "vwap",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "vwap_deviation": {
+          "name": "vwap_deviation",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "obv": {
+          "name": "obv",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "obv_zscore": {
+          "name": "obv_zscore",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "percent_b": {
+          "name": "percent_b",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "bb_width": {
+          "name": "bb_width",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "atr": {
+          "name": "atr",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "atr_percent": {
+          "name": "atr_percent",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "adx": {
+          "name": "adx",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "adx_direction": {
+          "name": "adx_direction",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "rsi": {
+          "name": "rsi",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "technical_analysis_token_tokens_address_fk": {
+          "name": "technical_analysis_token_tokens_address_fk",
+          "tableFrom": "technical_analysis",
+          "tableTo": "tokens",
+          "columnsFrom": ["token"],
+          "columnsTo": ["address"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -99,7 +219,44 @@
           "notNull": true
         }
       },
-      "indexes": {},
+      "indexes": {
+        "token_ohlcv_token_timestamp_idx": {
+          "name": "token_ohlcv_token_timestamp_idx",
+          "columns": [
+            {
+              "expression": "token",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "timestamp",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "token_ohlcv_timestamp_idx": {
+          "name": "token_ohlcv_timestamp_idx",
+          "columns": [
+            {
+              "expression": "timestamp",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {
         "token_ohlcv_token_tokens_address_fk": {
           "name": "token_ohlcv_token_tokens_address_fk",
@@ -111,7 +268,12 @@
           "onUpdate": "no action"
         }
       },
-      "compositePrimaryKeys": {},
+      "compositePrimaryKeys": {
+        "token_ohlcv_token_timestamp_pk": {
+          "name": "token_ohlcv_token_timestamp_pk",
+          "columns": ["token", "timestamp"]
+        }
+      },
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
@@ -145,8 +307,8 @@
           "primaryKey": false,
           "notNull": true
         },
-        "logo_uri": {
-          "name": "logo_uri",
+        "icon_url": {
+          "name": "icon_url",
           "type": "text",
           "primaryKey": false,
           "notNull": true
@@ -154,6 +316,90 @@
       },
       "indexes": {},
       "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.trading_signals": {
+      "name": "trading_signals",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "token": {
+          "name": "token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "signal_type": {
+          "name": "signal_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "indicator": {
+          "name": "indicator",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "strength": {
+          "name": "strength",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "price": {
+          "name": "price",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "message": {
+          "name": "message",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "metadata": {
+          "name": "metadata",
+          "type": "json",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "timestamp": {
+          "name": "timestamp",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "trading_signals_token_tokens_address_fk": {
+          "name": "trading_signals_token_tokens_address_fk",
+          "tableFrom": "trading_signals",
+          "tableTo": "tokens",
+          "columnsFrom": ["token"],
+          "columnsTo": ["address"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -175,6 +421,24 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true
+        },
+        "first_name": {
+          "name": "first_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "last_name": {
+          "name": "last_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "username": {
+          "name": "username",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         },
         "age": {
           "name": "age",

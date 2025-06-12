@@ -7,9 +7,13 @@
     "bollinger",
     "macd",
     "neverthrow",
+    "OBVZ",
     "Ohlcv",
     "Solana",
+    "technicalindicators",
     "Upserted",
-    "Vybe"
+    "VWAP",
+    "Vybe",
+    "zscore"
   ]
 }
