@@ -17,11 +17,11 @@ export const analyzerAgent = createReactAgent({
 });
 
 export const analyzerNode = async (state: typeof graphState.State): Promise<Partial<typeof graphState.State>> => {
-  logger.info("analyzerNode", "analyzerNode", state);
+  logger.info("analyzerNode", state);
   const { messages, userAssets, userProfile } = state;
 
   const result = await analyzerAgent.invoke({ messages, userAssets, userProfile });
-  logger.info("analyzerNode", "analyzer result", result);
+  logger.info("analyzer result", result);
 
   return { messages: [...result.messages] };
 };

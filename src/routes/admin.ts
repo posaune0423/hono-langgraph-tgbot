@@ -3,6 +3,8 @@ import { adminAuth } from "../utils/auth";
 import { sendAdminMessage, sendBroadcastMessage } from "../lib/telegram/bot";
 import { logger } from "../utils/logger";
 import type { AdminSendMessageRequest, AdminBroadcastRequest } from "../types";
+import { cleanupAllTokensOHLCVByCount, cleanupOldOHLCVData } from "../utils/db";
+import { OHLCV_RETENTION } from "../constants/database";
 
 const route = new Hono();
 
@@ -23,16 +25,19 @@ route.post("/send-message", async (c) => {
       if (contentType.includes("application/json")) {
         // Parse JSON
         body = (await c.req.json()) as AdminSendMessageRequest;
-      } else if (contentType.includes("multipart/form-data") || contentType.includes("application/x-www-form-urlencoded")) {
+      } else if (
+        contentType.includes("multipart/form-data") ||
+        contentType.includes("application/x-www-form-urlencoded")
+      ) {
         // Parse form data
         const formData = await c.req.parseBody();
         body = {
           userId: formData.userId as string,
           message: formData.message as string,
-          parseMode: formData.parseMode as ("HTML" | "Markdown" | "MarkdownV2" | undefined),
+          parseMode: formData.parseMode as "HTML" | "Markdown" | "MarkdownV2" | undefined,
         };
       } else {
-        logger.warn("admin/send-message", "Unsupported Content-Type header", {
+        logger.warn("Unsupported Content-Type header", {
           contentType,
         });
         return c.json(
@@ -45,7 +50,7 @@ route.post("/send-message", async (c) => {
         );
       }
     } catch (parseError) {
-      logger.warn("admin/send-message", "Failed to parse request body", {
+      logger.warn("Failed to parse request body", {
         error: parseError instanceof Error ? parseError.message : "Unknown parse error",
         contentType,
       });
@@ -61,7 +66,7 @@ route.post("/send-message", async (c) => {
 
     // Validate body is an object
     if (!body || typeof body !== "object") {
-      logger.warn("admin/send-message", "Request body is not an object", {
+      logger.warn("Request body is not an object", {
         bodyType: typeof body,
       });
       return c.json(
@@ -75,7 +80,7 @@ route.post("/send-message", async (c) => {
 
     // Early return for missing userId
     if (!body.userId) {
-      logger.warn("admin/send-message", "Missing userId", { body });
+      logger.warn("Missing userId", { body });
       return c.json(
         {
           error: "Missing required fields",
@@ -88,7 +93,7 @@ route.post("/send-message", async (c) => {
     // Validate message
     const messageValidation = validateMessage(body.message);
     if (!messageValidation.valid) {
-      logger.warn("admin/send-message", "Message validation failed", {
+      logger.warn("Message validation failed", {
         error: messageValidation.error,
         details: messageValidation.details,
       });
@@ -104,7 +109,7 @@ route.post("/send-message", async (c) => {
     // Validate parseMode
     const parseModeValidation = validateParseMode(body.parseMode);
     if (!parseModeValidation.valid) {
-      logger.warn("admin/send-message", "ParseMode validation failed", {
+      logger.warn("ParseMode validation failed", {
         parseMode: body.parseMode,
       });
       return c.json(
@@ -116,7 +121,7 @@ route.post("/send-message", async (c) => {
       );
     }
 
-    logger.info("admin/send-message", "Attempting to send message", {
+    logger.info("Attempting to send message", {
       userId: body.userId,
       messageLength: body.message.length,
       parseMode: body.parseMode,
@@ -126,21 +131,21 @@ route.post("/send-message", async (c) => {
     const result = await sendAdminMessage(body);
 
     if (!result.success) {
-      logger.error("admin/send-message", "Failed to send message", {
+      logger.error("Failed to send message", {
         userId: body.userId,
         error: result.error,
       });
       return c.json(result, 500);
     }
 
-    logger.info("admin/send-message", "Message sent successfully", {
+    logger.info("Message sent successfully", {
       userId: body.userId,
       messageId: result.messageId,
     });
 
     return c.json(result, 200);
   } catch (error) {
-    logger.error("admin/send-message", "Unexpected error occurred", error);
+    logger.error("Unexpected error occurred", error);
     return c.json(
       {
         success: false,
@@ -165,15 +170,21 @@ route.post("/broadcast", async (c) => {
       if (contentType.includes("application/json")) {
         // Parse JSON
         body = (await c.req.json()) as AdminBroadcastRequest;
-      } else if (contentType.includes("multipart/form-data") || contentType.includes("application/x-www-form-urlencoded")) {
+      } else if (
+        contentType.includes("multipart/form-data") ||
+        contentType.includes("application/x-www-form-urlencoded")
+      ) {
         // Parse form data
         const formData = await c.req.parseBody();
         body = {
           message: formData.message as string,
-          parseMode: formData.parseMode as ("HTML" | "Markdown" | "MarkdownV2" | undefined),
-          excludeUserIds: formData.excludeUserIds ?
-            (formData.excludeUserIds as string).split(',').map(id => id.trim()).filter(id => id) :
-            undefined,
+          parseMode: formData.parseMode as "HTML" | "Markdown" | "MarkdownV2" | undefined,
+          excludeUserIds: formData.excludeUserIds
+            ? (formData.excludeUserIds as string)
+                .split(",")
+                .map((id) => id.trim())
+                .filter((id) => id)
+            : undefined,
         };
       } else {
         logger.warn("admin/broadcast", "Unsupported Content-Type header", {
@@ -288,6 +299,63 @@ route.post("/broadcast", async (c) => {
         successCount: 0,
         failureCount: 0,
         results: [],
+      },
+      500,
+    );
+  }
+});
+
+// POST /admin/cleanup-ohlcv - OHLCVデータの手動クリーンアップ
+route.post("/cleanup-ohlcv", async (c) => {
+  try {
+    const body = await c.req.json().catch(() => ({}));
+    const { method = "count", retentionDays, keepCount } = body;
+
+    logger.info("admin-cleanup-ohlcv", "Starting manual OHLCV cleanup", {
+      method,
+      retentionDays,
+      keepCount,
+      adminRequest: true,
+    });
+
+    if (method === "count") {
+      // 件数ベースのクリーンアップ
+      const finalKeepCount = keepCount || OHLCV_RETENTION.MAX_RECORDS_PER_TOKEN;
+      await cleanupAllTokensOHLCVByCount(finalKeepCount);
+
+      return c.json({
+        success: true,
+        message: `Successfully cleaned up OHLCV data, keeping ${finalKeepCount} records per token`,
+        method: "count",
+        keepCount: finalKeepCount,
+      });
+    } else if (method === "days") {
+      // 日数ベースのクリーンアップ
+      const finalRetentionDays = retentionDays || 30;
+      await cleanupOldOHLCVData(finalRetentionDays);
+
+      return c.json({
+        success: true,
+        message: `Successfully cleaned up OHLCV data older than ${finalRetentionDays} days`,
+        method: "days",
+        retentionDays: finalRetentionDays,
+      });
+    } else {
+      return c.json(
+        {
+          success: false,
+          error: "Invalid cleanup method. Use 'count' or 'days'",
+        },
+        400,
+      );
+    }
+  } catch (error) {
+    logger.error("admin-cleanup-ohlcv", "Failed to cleanup OHLCV data", error);
+    return c.json(
+      {
+        success: false,
+        error: "Failed to cleanup OHLCV data",
+        details: error instanceof Error ? error.message : "Unknown error",
       },
       500,
     );

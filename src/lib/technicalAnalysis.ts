@@ -2,6 +2,19 @@ import { RSI, MACD, BollingerBands, SMA, EMA } from "technicalindicators";
 import { logger } from "../utils/logger";
 import { generateId } from "../utils/id";
 import type { NewTechnicalAnalysis, NewTradingSignal } from "../db";
+import {
+  RSI_CONFIG,
+  MACD_CONFIG,
+  BOLLINGER_BANDS_CONFIG,
+  MOVING_AVERAGE_CONFIG,
+  TECHNICAL_ANALYSIS_CONFIG,
+} from "../constants/technicalAnalysis";
+import {
+  generateRSISignal,
+  generateMACDSignal,
+  generateBollingerBandsSignal,
+  generateMovingAverageCrossSignal,
+} from "./signalGenerators";
 
 export type OHLCVData = {
   timestamp: number;
@@ -43,8 +56,11 @@ export type SignalResult = {
  * OHLCVデータからテクニカル指標を計算する
  */
 export const calculateTechnicalIndicators = (data: OHLCVData[]): AnalysisResult | null => {
-  if (data.length < 50) {
-    logger.warn("technicalAnalysis", "Insufficient data for technical analysis", { dataLength: data.length });
+  if (data.length < TECHNICAL_ANALYSIS_CONFIG.minimumDataPoints) {
+    logger.warn("Insufficient data for technical analysis", {
+      dataLength: data.length,
+      minimumRequired: TECHNICAL_ANALYSIS_CONFIG.minimumDataPoints,
+    });
     return null;
   }
 
@@ -54,44 +70,44 @@ export const calculateTechnicalIndicators = (data: OHLCVData[]): AnalysisResult 
   const volumes = data.map((d) => d.volume);
 
   try {
-    // RSI (14期間)
-    const rsiResult = RSI.calculate({ values: closes, period: 14 });
+    // RSI
+    const rsiResult = RSI.calculate({ values: closes, period: RSI_CONFIG.period });
     const rsi = rsiResult[rsiResult.length - 1];
 
-    // MACD (12, 26, 9)
+    // MACD
     const macdResult = MACD.calculate({
       values: closes,
-      fastPeriod: 12,
-      slowPeriod: 26,
-      signalPeriod: 9,
+      fastPeriod: MACD_CONFIG.fastPeriod,
+      slowPeriod: MACD_CONFIG.slowPeriod,
+      signalPeriod: MACD_CONFIG.signalPeriod,
       SimpleMAOscillator: false,
       SimpleMASignal: false,
     });
     const macd = macdResult[macdResult.length - 1];
 
-    // Bollinger Bands (20期間, 2σ)
+    // Bollinger Bands
     const bbResult = BollingerBands.calculate({
       values: closes,
-      period: 20,
-      stdDev: 2,
+      period: BOLLINGER_BANDS_CONFIG.period,
+      stdDev: BOLLINGER_BANDS_CONFIG.stdDev,
     });
     const bb = bbResult[bbResult.length - 1];
 
     // 移動平均線
-    const sma20Result = SMA.calculate({ values: closes, period: 20 });
+    const sma20Result = SMA.calculate({ values: closes, period: MOVING_AVERAGE_CONFIG.shortSmaPeriod });
     const sma20 = sma20Result[sma20Result.length - 1];
 
-    const sma50Result = SMA.calculate({ values: closes, period: 50 });
+    const sma50Result = SMA.calculate({ values: closes, period: MOVING_AVERAGE_CONFIG.longSmaPeriod });
     const sma50 = sma50Result[sma50Result.length - 1];
 
-    const ema12Result = EMA.calculate({ values: closes, period: 12 });
+    const ema12Result = EMA.calculate({ values: closes, period: MOVING_AVERAGE_CONFIG.shortEmaPeriod });
     const ema12 = ema12Result[ema12Result.length - 1];
 
-    const ema26Result = EMA.calculate({ values: closes, period: 26 });
+    const ema26Result = EMA.calculate({ values: closes, period: MOVING_AVERAGE_CONFIG.longEmaPeriod });
     const ema26 = ema26Result[ema26Result.length - 1];
 
     // 出来高移動平均
-    const volumeSmaResult = SMA.calculate({ values: volumes, period: 20 });
+    const volumeSmaResult = SMA.calculate({ values: volumes, period: MOVING_AVERAGE_CONFIG.volumePeriod });
     const volumeSma = volumeSmaResult[volumeSmaResult.length - 1];
 
     return {
@@ -126,6 +142,7 @@ export const calculateTechnicalIndicators = (data: OHLCVData[]): AnalysisResult 
 
 /**
  * テクニカル指標から売買シグナルを生成する
+ * 各指標のシグナル生成関数を使用して明確で保守しやすい実装
  */
 export const generateTradingSignals = (
   analysis: AnalysisResult,
@@ -134,118 +151,23 @@ export const generateTradingSignals = (
 ): SignalResult[] => {
   const signals: SignalResult[] = [];
 
-  // RSIベースのシグナル
-  if (analysis.rsi !== undefined) {
-    if (analysis.rsi <= 30) {
-      signals.push({
-        type: "BUY",
-        indicator: "RSI",
-        strength: analysis.rsi <= 20 ? "STRONG" : "MODERATE",
-        message: `RSI oversold condition detected (${analysis.rsi.toFixed(2)})`,
-        metadata: { rsi: analysis.rsi, threshold: 30 },
-      });
-    } else if (analysis.rsi >= 70) {
-      signals.push({
-        type: "SELL",
-        indicator: "RSI",
-        strength: analysis.rsi >= 80 ? "STRONG" : "MODERATE",
-        message: `RSI overbought condition detected (${analysis.rsi.toFixed(2)})`,
-        metadata: { rsi: analysis.rsi, threshold: 70 },
-      });
-    }
-  }
+  // 各指標のシグナル生成関数を呼び出し
+  const signalGenerators = [
+    () => generateRSISignal(analysis),
+    () => generateMACDSignal(analysis, previousAnalysis),
+    () => generateBollingerBandsSignal(analysis, currentPrice),
+    () => generateMovingAverageCrossSignal(analysis, previousAnalysis),
+  ];
 
-  // MACDベースのシグナル
-  if (analysis.macd && previousAnalysis?.macd) {
-    const currentHistogram = analysis.macd.histogram;
-    const previousHistogram = previousAnalysis.macd.histogram;
-
-    // MACDクロスオーバー
-    if (previousHistogram <= 0 && currentHistogram > 0) {
-      signals.push({
-        type: "BUY",
-        indicator: "MACD",
-        strength: Math.abs(currentHistogram) > 0.01 ? "STRONG" : "MODERATE",
-        message: "MACD bullish crossover detected",
-        metadata: {
-          macd: analysis.macd.macd,
-          signal: analysis.macd.signal,
-          histogram: currentHistogram,
-        },
-      });
-    } else if (previousHistogram >= 0 && currentHistogram < 0) {
-      signals.push({
-        type: "SELL",
-        indicator: "MACD",
-        strength: Math.abs(currentHistogram) > 0.01 ? "STRONG" : "MODERATE",
-        message: "MACD bearish crossover detected",
-        metadata: {
-          macd: analysis.macd.macd,
-          signal: analysis.macd.signal,
-          histogram: currentHistogram,
-        },
-      });
-    }
-  }
-
-  // Bollinger Bandsベースのシグナル
-  if (analysis.bollingerBands) {
-    const { upper, lower } = analysis.bollingerBands;
-
-    if (currentPrice <= lower) {
-      signals.push({
-        type: "BUY",
-        indicator: "BB",
-        strength: "MODERATE",
-        message: "Price touched lower Bollinger Band",
-        metadata: {
-          price: currentPrice,
-          lowerBand: lower,
-          upperBand: upper,
-        },
-      });
-    } else if (currentPrice >= upper) {
-      signals.push({
-        type: "SELL",
-        indicator: "BB",
-        strength: "MODERATE",
-        message: "Price touched upper Bollinger Band",
-        metadata: {
-          price: currentPrice,
-          lowerBand: lower,
-          upperBand: upper,
-        },
-      });
-    }
-  }
-
-  // 移動平均クロスシグナル
-  if (analysis.sma20 && analysis.sma50 && previousAnalysis?.sma20 && previousAnalysis?.sma50) {
-    const currentGoldenCross = analysis.sma20 > analysis.sma50;
-    const previousGoldenCross = previousAnalysis.sma20 > previousAnalysis.sma50;
-
-    if (!previousGoldenCross && currentGoldenCross) {
-      signals.push({
-        type: "BUY",
-        indicator: "SMA_CROSS",
-        strength: "STRONG",
-        message: "Golden Cross detected (SMA20 > SMA50)",
-        metadata: {
-          sma20: analysis.sma20,
-          sma50: analysis.sma50,
-        },
-      });
-    } else if (previousGoldenCross && !currentGoldenCross) {
-      signals.push({
-        type: "SELL",
-        indicator: "SMA_CROSS",
-        strength: "STRONG",
-        message: "Death Cross detected (SMA20 < SMA50)",
-        metadata: {
-          sma20: analysis.sma20,
-          sma50: analysis.sma50,
-        },
-      });
+  // 各シグナル生成関数を実行し、結果をまとめる
+  for (const generateSignal of signalGenerators) {
+    try {
+      const signal = generateSignal();
+      if (signal) {
+        signals.push(signal);
+      }
+    } catch (error) {
+      logger.error("technicalAnalysis", "Error generating signal", error);
     }
   }
 

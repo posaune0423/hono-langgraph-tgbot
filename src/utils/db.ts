@@ -21,6 +21,7 @@ import {
 } from "../db";
 import { logger } from "./logger";
 import { HumanMessage, AIMessage, type BaseMessage } from "@langchain/core/messages";
+import { QUERY_LIMITS, BATCH_PROCESSING } from "../constants/database";
 
 export const getTokens = async (): Promise<Token[]> => {
   const db = getDB();
@@ -29,7 +30,13 @@ export const getTokens = async (): Promise<Token[]> => {
 
 export const createTokens = async (newTokens: NewToken[]): Promise<Token[]> => {
   const db = getDB();
-  return db.insert(tokens).values(newTokens).returning();
+  return await db
+    .insert(tokens)
+    .values(newTokens)
+    .onConflictDoNothing({
+      target: tokens.address,
+    })
+    .returning();
 };
 
 export const getUsers = async (): Promise<User[]> => {
@@ -86,14 +93,14 @@ export const getUserProfileByWalletAddress = async (walletAddress: string): Prom
 /**
  * 指定したトークンの最新のOHLCVデータを指定期間分取得する
  */
-export const getTokenOHLCV = async (tokenAddress: string, limit: number = 100): Promise<TokenOHLCV[]> => {
+export const getTokenOHLCV = async (tokenAddress: string, limit: number = QUERY_LIMITS.DEFAULT_OHLCV_LIMIT): Promise<TokenOHLCV[]> => {
   const db = getDB();
   const data = await db
     .select()
     .from(tokenOHLCV)
     .where(eq(tokenOHLCV.token, tokenAddress))
     .orderBy(desc(tokenOHLCV.timestamp))
-    .limit(limit);
+    .limit(Math.min(limit, QUERY_LIMITS.MAX_OHLCV_LIMIT));
 
   // 古い順にソート（計算用）
   return data.reverse();
@@ -136,7 +143,6 @@ export const createTechnicalAnalysis = async (data: NewTechnicalAnalysis[]): Pro
       "ema_26",
       "volume_sma",
     ],
-    logContext: "saveTechnicalAnalysis",
   });
 };
 
@@ -149,7 +155,6 @@ export const createTradingSignals = async (data: NewTradingSignal[]): Promise<vo
   await batchUpsert(tradingSignals, data, {
     conflictTarget: ["id"],
     updateFields: ["signal_type", "indicator", "strength", "price", "message", "metadata"],
-    logContext: "saveTradingSignals",
   });
 };
 
@@ -230,7 +235,7 @@ export const getChatHistory = async (userId: string, limit: number = 100): Promi
 export const saveChatMessage = async (userId: string, message: BaseMessage): Promise<void> => {
   const db = getDB();
 
-  const messageId = `${userId}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  const messageId = crypto.randomUUID();
   const messageType = message instanceof HumanMessage ? "human" : "ai";
 
   const newMessage: NewChatMessage = {
@@ -241,7 +246,7 @@ export const saveChatMessage = async (userId: string, message: BaseMessage): Pro
   };
 
   await db.insert(chatHistory).values(newMessage);
-  logger.debug("saveChatMessage", `Saved ${messageType} message for user ${userId}`);
+  logger.info(`Saved ${messageType} message for user ${userId}`);
 };
 
 /**
@@ -250,7 +255,7 @@ export const saveChatMessage = async (userId: string, message: BaseMessage): Pro
 export const clearChatHistory = async (userId: string): Promise<void> => {
   const db = getDB();
   await db.delete(chatHistory).where(eq(chatHistory.userId, userId));
-  logger.info("clearChatHistory", `Cleared chat history for user ${userId}`);
+  logger.info(`Cleared chat history for user ${userId}`);
 };
 
 // Drizzleテーブルからカラム名を抽出する型（keyofを使用してシンプルに）
@@ -293,66 +298,155 @@ export interface BatchUpsertOptions<TTable extends SchemaTable> {
 // schemaから動的に全テーブルの型を生成
 type SchemaTable = (typeof schema)[keyof typeof schema];
 
-export async function batchUpsert<TTable extends SchemaTable, T extends Record<string, any>>(
-  table: TTable,
+export const batchUpsert = async <T extends Record<string, any>>(
+  table: SchemaTable,
   data: T[],
-  options: BatchUpsertOptions<TTable>,
-): Promise<{ totalUpserted: number; batchCount: number }> {
-  const { batchSize = 500, maxConcurrent = 3, conflictTarget, updateFields, logContext = "batchUpsert" } = options;
-
-  if (data.length === 0) {
-    logger.warn(logContext, "No data to upsert");
+  options: {
+    conflictTarget: string[];
+    updateFields: string[];
+    batchSize?: number;
+    maxConcurrency?: number;
+  },
+): Promise<{ totalUpserted: number; batchCount: number }> => {
+  if (!data || data.length === 0) {
+    logger.warn("No data provided for batch upsert");
     return { totalUpserted: 0, batchCount: 0 };
   }
 
+  const batchSize = options.batchSize || BATCH_PROCESSING.DEFAULT_BATCH_SIZE;
+  const maxConcurrency = options.maxConcurrency || BATCH_PROCESSING.MAX_CONCURRENT_BATCHES;
+  const batches: T[][] = [];
+
   // データをバッチに分割
-  const batches = [];
   for (let i = 0; i < data.length; i += batchSize) {
     batches.push(data.slice(i, i + batchSize));
   }
 
-  logger.info(logContext, `Starting batch upsert: ${data.length} records in ${batches.length} batches`);
+  logger.info(`Processing ${data.length} records in ${batches.length} batches (size: ${batchSize}, concurrency: ${maxConcurrency})`);
 
   let totalUpserted = 0;
 
-  // 並列処理でバッチを実行
-  for (let i = 0; i < batches.length; i += maxConcurrent) {
-    const concurrentBatches = batches.slice(i, i + maxConcurrent);
+  // バッチを並行処理（制限付き）
+  for (let i = 0; i < batches.length; i += maxConcurrency) {
+    const currentBatches = batches.slice(i, i + maxConcurrency);
+    const batchPromises = currentBatches.map(async (batch, index) => {
+      const batchNumber = i + index + 1;
 
-    const batchPromises = concurrentBatches.map(async (batch, batchIndex) => {
-      const actualBatchNumber = i + batchIndex + 1;
+      try {
+        const db = getDB();
 
-      // UPSERT実行
-      const dbInstance = getDB();
-      const insertQuery = dbInstance.insert(table).values(batch);
+        // 実行時検証: conflictTargetとupdateFieldsがテーブルのカラム名と一致するかチェック
+        const sampleRecord = batch[0];
+        if (sampleRecord && typeof sampleRecord === 'object') {
+          const recordKeys = Object.keys(sampleRecord);
 
-      // conflict時の更新設定を動的に生成
-      const updateSet: Record<string, any> = {};
-      updateFields.forEach((field: string) => {
-        updateSet[field] = sql`excluded.${sql.identifier(field)}`;
-      });
+          // conflictTargetの検証
+          const invalidConflictFields = options.conflictTarget.filter(field => !recordKeys.includes(field));
+          if (invalidConflictFields.length > 0) {
+            logger.warn(`Invalid conflict target fields: ${invalidConflictFields.join(', ')}`);
+          }
 
-      await insertQuery.onConflictDoUpdate({
-        target: conflictTarget.map((field: string) => (table as any)[field]),
-        set: updateSet,
-      });
+          // updateFieldsの検証
+          const invalidUpdateFields = options.updateFields.filter(field => !recordKeys.includes(field));
+          if (invalidUpdateFields.length > 0) {
+            logger.warn(`Invalid update fields: ${invalidUpdateFields.join(', ')}`);
+          }
+        }
 
-      logger.debug(logContext, `Completed batch ${actualBatchNumber}/${batches.length}: ${batch.length} records`);
-      return batch.length;
+        const updateObject = options.updateFields.reduce((acc, field) => {
+          acc[field] = sql.raw(`excluded.${field}`);
+          return acc;
+        }, {} as Record<string, any>);
+
+        const result = await db
+          .insert(table)
+          .values(batch)
+          .onConflictDoUpdate({
+            target: options.conflictTarget as any,
+            set: updateObject,
+          });
+
+        logger.info(`Batch ${batchNumber}/${batches.length} completed: ${batch.length} records`);
+        return batch.length;
+      } catch (error) {
+        logger.error(`Batch ${batchNumber} failed:`, error);
+        throw error;
+      }
     });
 
-    const results = await Promise.all(batchPromises);
-    totalUpserted += results.reduce((sum, count) => sum + count, 0);
-
-    // 進捗ログ
-    const completedBatches = Math.min(i + maxConcurrent, batches.length);
-    logger.debug(logContext, `Progress: ${completedBatches}/${batches.length} batches completed`);
+    const batchResults = await Promise.all(batchPromises);
+    totalUpserted += batchResults.reduce((sum, count) => sum + count, 0);
   }
 
-  logger.info(
-    logContext,
-    `Successfully upserted ${totalUpserted} records in ${batches.length} batches (${maxConcurrent} concurrent)`,
+  logger.info(`Successfully upserted ${totalUpserted} records in ${batches.length} batches`);
+  return { totalUpserted, batchCount: batches.length };
+};
+
+/**
+ * 古いOHLCVデータを定期的にクリーンアップする
+ * @param retentionDays 保持日数（デフォルト：30日）
+ */
+export const cleanupOldOHLCVData = async (retentionDays: number = 30): Promise<void> => {
+  const db = getDB();
+  const cutoffTimestamp = Math.floor(Date.now() / 1000) - (retentionDays * 24 * 60 * 60);
+
+  const deletedRows = await db
+    .delete(tokenOHLCV)
+    .where(sql`${tokenOHLCV.timestamp} < ${cutoffTimestamp}`)
+    .returning({ token: tokenOHLCV.token, timestamp: tokenOHLCV.timestamp });
+
+  logger.info("cleanupOldOHLCVData", `Cleaned up ${deletedRows.length} old OHLCV records older than ${retentionDays} days`);
+};
+
+/**
+ * 指定したトークンの古いOHLCVデータを保持件数制限でクリーンアップする
+ * @param tokenAddress トークンアドレス
+ * @param keepCount 保持する件数（デフォルト：1000件）
+ */
+export const cleanupTokenOHLCVByCount = async (tokenAddress: string, keepCount: number = 1000): Promise<void> => {
+  const db = getDB();
+
+  // 保持する最新のタイムスタンプを取得
+  const [cutoffRecord] = await db
+    .select({ timestamp: tokenOHLCV.timestamp })
+    .from(tokenOHLCV)
+    .where(eq(tokenOHLCV.token, tokenAddress))
+    .orderBy(desc(tokenOHLCV.timestamp))
+    .limit(1)
+    .offset(keepCount - 1);
+
+  if (!cutoffRecord) {
+    logger.info(`No cleanup needed for token ${tokenAddress}`);
+    return;
+  }
+
+  const deletedRows = await db
+    .delete(tokenOHLCV)
+    .where(
+      and(
+        eq(tokenOHLCV.token, tokenAddress),
+        sql`${tokenOHLCV.timestamp} < ${cutoffRecord.timestamp}`
+      )
+    )
+    .returning({ token: tokenOHLCV.token, timestamp: tokenOHLCV.timestamp });
+
+  logger.info(`Cleaned up ${deletedRows.length} old OHLCV records for token ${tokenAddress}, keeping latest ${keepCount} records`);
+};
+
+/**
+ * 全トークンのOHLCVデータを件数制限でクリーンアップする
+ * @param keepCount 各トークンごとに保持する件数（デフォルト：1000件）
+ */
+export const cleanupAllTokensOHLCVByCount = async (keepCount: number = 1000): Promise<void> => {
+  const tokens = await getTokens();
+
+  logger.info(`Starting cleanup for ${tokens.length} tokens, keeping ${keepCount} records each`);
+
+  const cleanupPromises = tokens.map(token =>
+    cleanupTokenOHLCVByCount(token.address, keepCount)
   );
 
-  return { totalUpserted, batchCount: batches.length };
-}
+  await Promise.all(cleanupPromises);
+
+  logger.info(`Completed cleanup for all tokens`);
+};

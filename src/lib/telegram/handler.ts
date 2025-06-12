@@ -7,8 +7,10 @@ import { SetupStep } from "../../types";
 import { proceedToNextStep } from "./command";
 import { isValidSolanaAddress } from "../../utils/solana";
 import { dumpTokenUsage, isAnalyzerMessage, isGeneralistMessage } from "../../utils";
-import { getUserProfile, updateUserProfile, getChatHistory, saveChatMessage } from "../../utils/db";
+import { getUserProfile, updateUserProfile, getChatHistory, saveChatMessage, createTokens } from "../../utils/db";
 import { timeoutPromise } from "../../utils";
+import { getAssetsByOwner } from "../helius";
+import { NewToken, tokens } from "../../db";
 
 export const setupHandler = (bot: Bot) => {
   bot.on("message:text", async (ctx: Context) => {
@@ -52,6 +54,18 @@ export const setupHandler = (bot: Bot) => {
             await ctx.reply(`Wallet address set to ${text}!`, {
               parse_mode: "Markdown",
             });
+
+            const assets = await getAssetsByOwner(text);
+            const userTokens: NewToken[] = assets.map((asset) => ({
+              symbol: asset.content?.metadata?.symbol || asset.token_info?.symbol || "",
+              name: asset.content?.metadata?.name || "",
+              decimals: asset.token_info?.decimals || 9,
+              address: asset.id,
+              iconUrl: asset.content?.files?.[0]?.uri || "",
+            }));
+
+            // Insert tokens into database, ignoring duplicates
+            await createTokens(userTokens);
 
             // Proceed to the next step
             await proceedToNextStep(ctx, userId, SetupStep.WALLET_ADDRESS);

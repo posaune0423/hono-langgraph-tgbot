@@ -68,7 +68,7 @@ const sendMessageToUser = async (
       parse_mode: parseMode,
     });
 
-    logger.info("sendMessageToUser", `Message sent to user ${userId}`, {
+    logger.info(`Message sent to user ${userId}`, {
       messageId: result.message_id,
       message: message.substring(0, 50) + "...",
     });
@@ -92,7 +92,7 @@ const sendMessageToUser = async (
       errorType = "network";
     }
 
-    logger.warn("sendMessageToUser", `Failed to send message to user ${userId}`, {
+    logger.warn(`Failed to send message to user ${userId}`, {
       error: errorMessage,
       type: errorType,
     });
@@ -169,7 +169,7 @@ export const sendAdminMessage = async (request: AdminSendMessageRequest): Promis
  * Send broadcast message with efficient batch processing and neverthrow
  */
 export const sendBroadcastMessage = async (request: AdminBroadcastRequest): Promise<AdminBroadcastResponse> => {
-  logger.info("sendBroadcastMessage", "Starting broadcast", {
+  logger.info("Starting broadcast", {
     messageLength: request.message.length,
     parseMode: request.parseMode,
     excludeCount: request.excludeUserIds?.length ?? 0,
@@ -180,7 +180,7 @@ export const sendBroadcastMessage = async (request: AdminBroadcastRequest): Prom
 
   // Early return for empty user list
   if (userIds.length === 0) {
-    logger.warn("sendBroadcastMessage", "No users found for broadcast");
+    logger.warn("No users found for broadcast");
     return {
       success: true,
       totalUsers: 0,
@@ -197,7 +197,7 @@ export const sendBroadcastMessage = async (request: AdminBroadcastRequest): Prom
     batches.push(userIds.slice(i, i + BATCH_SIZE));
   }
 
-  logger.info("sendBroadcastMessage", `Processing ${batches.length} batches of up to ${BATCH_SIZE} users each`);
+  logger.info(`Processing ${batches.length} batches of up to ${BATCH_SIZE} users each`);
 
   const allResults: BroadcastResult[] = [];
 
@@ -205,7 +205,7 @@ export const sendBroadcastMessage = async (request: AdminBroadcastRequest): Prom
   for (let i = 0; i < batches.length; i++) {
     const batch = batches[i];
 
-    logger.info("sendBroadcastMessage", `Processing batch ${i + 1}/${batches.length} (${batch.length} users)`);
+    logger.info(`Processing batch ${i + 1}/${batches.length} (${batch.length} users)`);
 
     const batchResults = await processBatch(batch, request.message, request.parseMode);
     allResults.push(...batchResults);

@@ -1,6 +1,6 @@
 import { neon } from "@neondatabase/serverless";
 import { drizzle } from "drizzle-orm/neon-http";
-import { pgTable, text, integer, timestamp, json, boolean, numeric, primaryKey } from "drizzle-orm/pg-core";
+import { pgTable, text, integer, timestamp, json, boolean, numeric, primaryKey, index } from "drizzle-orm/pg-core";
 import { logger } from "./utils/logger";
 
 // Users table based on UserProfile interface
@@ -68,7 +68,12 @@ export const tokenOHLCV = pgTable(
     close: numeric("close").notNull(),
     volume: numeric("volume").notNull(),
   },
-  (table) => [primaryKey({ columns: [table.token, table.timestamp] })],
+  (table) => [
+    primaryKey({ columns: [table.token, table.timestamp] }),
+    // パフォーマンス向上のためのインデックス
+    index("token_ohlcv_token_timestamp_idx").on(table.token, table.timestamp.desc()),
+    index("token_ohlcv_timestamp_idx").on(table.timestamp.desc()),
+  ],
 );
 
 // Technical analysis results table
@@ -130,11 +135,11 @@ let dbInstance: ReturnType<typeof drizzle<typeof schema>> | null = null;
 export function getDB() {
   if (!dbInstance) {
     if (!process.env.DATABASE_URL) {
-      logger.error("getDB()", "DATABASE_URL is not set");
+      logger.error("DATABASE_URL is not set");
       throw new Error("DATABASE_URL must be a Neon postgres connection string");
     }
 
-    logger.info("getDB()", "[DB] Connecting to Neon database");
+    logger.info("[DB] Connecting to Neon database");
     const sql = neon(process.env.DATABASE_URL);
     dbInstance = drizzle(sql, { schema });
   }

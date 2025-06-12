@@ -6,6 +6,7 @@ import {
   getLatestTechnicalAnalysis,
   createTechnicalAnalysis,
   createTradingSignals,
+  cleanupAllTokensOHLCVByCount,
 } from "./utils/db";
 import { fetchMultipleTokenOHLCV } from "./lib/vybe";
 import { tokenOHLCV } from "./db";
@@ -17,15 +18,22 @@ import {
   type OHLCVData,
   type AnalysisResult,
 } from "./lib/technicalAnalysis";
+import { OHLCV_RETENTION } from "./constants/database";
 
 // every 5 minutes
 export const runCronTasks = async () => {
-  logger.info("runCronTasks", `cron start: ${new Date().toISOString()}`);
+  logger.info(`cron start: ${new Date().toISOString()}`);
 
   await updateTokenOHLCVTask();
   await technicalAnalysisTask();
 
-  logger.info("runCronTasks", `cron end: ${new Date().toISOString()}`);
+  // 1時間おきにクリーンアップを実行（5分間隔のcronが12回実行されるごと）
+  const currentMinute = new Date().getMinutes();
+  if (currentMinute === 0) {
+    await cleanupOHLCVTask();
+  }
+
+  logger.info(`cron end: ${new Date().toISOString()}`);
 };
 
 const updateTokenOHLCVTask = async () => {
@@ -34,7 +42,7 @@ const updateTokenOHLCVTask = async () => {
   const result = await fetchMultipleTokenOHLCV(tokenAddresses, "5m");
 
   if (!result.isOk()) {
-    logger.error("updateTokenOHLCV", "Failed to fetch OHLCV data", result.error);
+    logger.error("Failed to fetch OHLCV data", result.error);
     return;
   }
 
@@ -52,7 +60,7 @@ const updateTokenOHLCVTask = async () => {
   });
 
   if (ohlcvValues.length === 0) {
-    logger.error("updateTokenOHLCV", "No OHLCV data found");
+    logger.error("No OHLCV data found");
     return;
   }
 
@@ -60,22 +68,21 @@ const updateTokenOHLCVTask = async () => {
   await batchUpsert(tokenOHLCV, ohlcvValues, {
     conflictTarget: ["token", "timestamp"],
     updateFields: ["open", "high", "low", "close", "volume"],
-    logContext: "updateTokenOHLCV",
   });
 };
 
 const technicalAnalysisTask = async () => {
-  logger.info("technicalAnalysisTask", "Starting technical analysis task");
+  logger.info("Starting technical analysis task");
 
   const tokens = await getTokens();
-  logger.info("technicalAnalysisTask", `Analyzing ${tokens.length} tokens`);
+  logger.info(`Analyzing ${tokens.length} tokens`);
 
   const analysisPromises = tokens.map(async (token) => {
     // 最新100件のOHLCVデータを取得（テクニカル分析には十分なデータが必要）
     const ohlcvData = await getTokenOHLCV(token.address, 100);
 
     if (ohlcvData.length < 50) {
-      logger.debug("technicalAnalysisTask", `Insufficient data for ${token.symbol}`, {
+      logger.info(`Insufficient data for ${token.symbol}`, {
         dataLength: ohlcvData.length,
       });
       return null;
@@ -94,7 +101,7 @@ const technicalAnalysisTask = async () => {
     // テクニカル指標を計算
     const analysis = calculateTechnicalIndicators(numericData);
     if (!analysis) {
-      logger.debug("technicalAnalysisTask", `Failed to calculate indicators for ${token.symbol}`);
+      logger.info(`Failed to calculate indicators for ${token.symbol}`);
       return null;
     }
 
@@ -136,7 +143,7 @@ const technicalAnalysisTask = async () => {
     const signals = generateTradingSignals(analysis, currentPrice, previousAnalysisData);
 
     if (signals.length > 0) {
-      logger.info("technicalAnalysisTask", `Generated ${signals.length} signals for ${token.symbol}`, {
+      logger.info(`Generated ${signals.length} signals for ${token.symbol}`, {
         signals: signals.map((s) => `${s.type}-${s.indicator}-${s.strength}`),
       });
     }
@@ -160,7 +167,7 @@ const technicalAnalysisTask = async () => {
     .map((result) => result.value);
 
   if (successfulResults.length === 0) {
-    logger.warn("technicalAnalysisTask", "No successful technical analysis results");
+    logger.warn("No successful technical analysis results");
     return;
   }
 
@@ -171,7 +178,7 @@ const technicalAnalysisTask = async () => {
 
   if (analysisData.length > 0) {
     await createTechnicalAnalysis(analysisData);
-    logger.info("technicalAnalysisTask", `Saved ${analysisData.length} technical analysis records`);
+    logger.info(`Saved ${analysisData.length} technical analysis records`);
   }
 
   // 重要なシグナルをデータベースに保存
@@ -182,21 +189,21 @@ const technicalAnalysisTask = async () => {
   );
 
   if (allSignals.length === 0) {
-    logger.warn("technicalAnalysisTask", "No trading signals found");
+    logger.warn("No trading signals found");
     return;
   }
 
   await createTradingSignals(allSignals);
-  logger.info("technicalAnalysisTask", `Saved ${allSignals.length} trading signals`);
+  logger.info(`Saved ${allSignals.length} trading signals`);
 
   const importantSignals = allSignals.filter((s) => s.strength === "STRONG");
   if (importantSignals.length === 0) {
-    logger.warn("technicalAnalysisTask", "No important trading signals found");
+    logger.warn("No important trading signals found");
     return;
   }
 
   // 重要なシグナルの詳細をログ出力
-  logger.info("technicalAnalysisTask", `Found ${importantSignals.length} STRONG signals`, {
+  logger.info(`Found ${importantSignals.length} STRONG signals`, {
     signals: importantSignals.map((s) => ({
       token: s.token,
       type: s.signal_type,
@@ -205,9 +212,28 @@ const technicalAnalysisTask = async () => {
     })),
   });
 
-  logger.info("technicalAnalysisTask", "Technical analysis task completed successfully", {
+  logger.info("Technical analysis task completed successfully", {
     analyzedTokens: successfulResults.length,
     totalSignals: allSignals.length,
     strongSignals: allSignals.filter((s) => s.strength === "STRONG").length,
   });
+};
+
+/**
+ * OHLCVデータのクリーンアップタスク
+ * 各トークンごとに最新500件のデータのみを保持し、古いデータを削除する
+ */
+const cleanupOHLCVTask = async () => {
+  logger.info("Starting OHLCV data cleanup");
+
+  try {
+    // 定数から保持件数を取得
+    await cleanupAllTokensOHLCVByCount(OHLCV_RETENTION.MAX_RECORDS_PER_TOKEN);
+
+    logger.info(
+      `Successfully completed OHLCV data cleanup, keeping ${OHLCV_RETENTION.MAX_RECORDS_PER_TOKEN} records per token`,
+    );
+  } catch (error) {
+    logger.error("Failed to cleanup OHLCV data", error);
+  }
 };
