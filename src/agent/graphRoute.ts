@@ -1,4 +1,4 @@
-import type { graphState } from "./state";
+import type { graphState } from "./graphState";
 import { END } from "@langchain/langgraph";
 
 export const managerRouter = (state: typeof graphState.State): "dataFetch" | "generalist" | typeof END => {

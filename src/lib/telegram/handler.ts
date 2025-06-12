@@ -1,5 +1,5 @@
 import type { Bot, Context } from "grammy";
-import { initGraph } from "../../graph";
+import { initGraph } from "../../agent/graph";
 import { HumanMessage, AIMessage } from "@langchain/core/messages";
 import type { StreamChunk } from "../../types";
 import { logger } from "../../utils/logger";

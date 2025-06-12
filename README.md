@@ -102,6 +102,7 @@ The system automatically collects OHLCV (Open, High, Low, Close, Volume) data ev
 You can manually trigger OHLCV data cleanup through the admin API:
 
 #### Count-based Cleanup (Recommended)
+
 ```bash
 curl -X POST https://your-domain.com/admin/cleanup-ohlcv \
   -H "Content-Type: application/json" \
@@ -110,6 +111,7 @@ curl -X POST https://your-domain.com/admin/cleanup-ohlcv \
 ```
 
 #### Time-based Cleanup
+
 ```bash
 curl -X POST https://your-domain.com/admin/cleanup-ohlcv \
   -H "Content-Type: application/json" \
@@ -123,7 +125,7 @@ OHLCV data retention settings can be adjusted in `src/constants/database.ts`:
 
 ```typescript
 export const OHLCV_RETENTION = {
-  MAX_RECORDS_PER_TOKEN: 500,  // Records to keep per token
+  MAX_RECORDS_PER_TOKEN: 500, // Records to keep per token
   MIN_RECORDS_FOR_ANALYSIS: 50, // Minimum for technical analysis
   CLEANUP_INTERVAL_MINUTES: 60, // Cleanup frequency
 } as const;
@@ -138,6 +140,7 @@ bun run deploy
 ## API Endpoints
 
 ### Core Endpoints
+
 - `GET /` - Health check
 - `GET /health` - Health status
 - `POST /webhook/telegram` - Telegram webhook
@@ -145,6 +148,7 @@ bun run deploy
 - `GET /webhook/info` - Get webhook info
 
 ### Admin Endpoints
+
 - `POST /admin/send-message` - Send message to specific user
 - `POST /admin/broadcast` - Broadcast message to all users
 - `POST /admin/cleanup-ohlcv` - Manual OHLCV data cleanup
@@ -187,6 +191,7 @@ bun run deploy
 - `volume` - Trading volume
 
 **Performance Features:**
+
 - Composite primary key on (token, timestamp) for efficient queries
 - Descending index on timestamp for latest data retrieval
 - Automated cleanup to maintain optimal size

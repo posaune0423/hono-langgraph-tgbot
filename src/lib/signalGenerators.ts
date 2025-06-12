@@ -50,7 +50,7 @@ export const generateRSISignal = (analysis: AnalysisResult): SignalResult | null
  */
 export const generateMACDSignal = (
   analysis: AnalysisResult,
-  previousAnalysis?: AnalysisResult
+  previousAnalysis?: AnalysisResult,
 ): SignalResult | null => {
   if (!analysis.macd || !previousAnalysis?.macd) return null;
 
@@ -93,10 +93,7 @@ export const generateMACDSignal = (
 /**
  * Bollinger Bandsバンドタッチシグナルを生成
  */
-export const generateBollingerBandsSignal = (
-  analysis: AnalysisResult,
-  currentPrice: number
-): SignalResult | null => {
+export const generateBollingerBandsSignal = (analysis: AnalysisResult, currentPrice: number): SignalResult | null => {
   if (!analysis.bollingerBands) return null;
 
   const { upper, lower } = analysis.bollingerBands;
@@ -137,7 +134,7 @@ export const generateBollingerBandsSignal = (
  */
 export const generateMovingAverageCrossSignal = (
   analysis: AnalysisResult,
-  previousAnalysis?: AnalysisResult
+  previousAnalysis?: AnalysisResult,
 ): SignalResult | null => {
   if (!analysis.sma20 || !analysis.sma50 || !previousAnalysis?.sma20 || !previousAnalysis?.sma50) {
     return null;

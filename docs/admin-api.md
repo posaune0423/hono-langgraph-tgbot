@@ -26,15 +26,16 @@ X-Admin-API-Key: <ADMIN_API_KEY>
 
 **パラメータ**:
 
-| フィールド | 型 | 必須 | 説明 |
-|-----------|---|------|------|
-| `userId` | string | ✓ | 送信先ユーザーのTelegram ID |
-| `message` | string | ✓ | 送信するメッセージ（最大4096文字） |
-| `parseMode` | string | - | メッセージの解析モード（`HTML`, `Markdown`, `MarkdownV2`） |
+| フィールド  | 型     | 必須 | 説明                                                       |
+| ----------- | ------ | ---- | ---------------------------------------------------------- |
+| `userId`    | string | ✓    | 送信先ユーザーのTelegram ID                                |
+| `message`   | string | ✓    | 送信するメッセージ（最大4096文字）                         |
+| `parseMode` | string | -    | メッセージの解析モード（`HTML`, `Markdown`, `MarkdownV2`） |
 
 #### レスポンス
 
 **成功時 (200)**:
+
 ```json
 {
   "success": true,
@@ -43,6 +44,7 @@ X-Admin-API-Key: <ADMIN_API_KEY>
 ```
 
 **エラー時 (400)**:
+
 ```json
 {
   "success": false,
@@ -68,6 +70,7 @@ X-Admin-API-Key: <ADMIN_API_KEY>
 ```
 
 **エラー時 (500)**:
+
 ```json
 {
   "success": false,
@@ -78,6 +81,7 @@ X-Admin-API-Key: <ADMIN_API_KEY>
 #### 使用例
 
 **JSON形式**:
+
 ```bash
 curl -X POST "https://your-domain.com/admin/send-message" \
   -H "Content-Type: application/json" \
@@ -90,6 +94,7 @@ curl -X POST "https://your-domain.com/admin/send-message" \
 ```
 
 **フォーム形式**:
+
 ```bash
 curl -X POST "https://your-domain.com/admin/send-message" \
   -H "X-Admin-API-Key: your-admin-api-key" \
@@ -110,15 +115,16 @@ curl -X POST "https://your-domain.com/admin/send-message" \
 
 **パラメータ**:
 
-| フィールド | 型 | 必須 | 説明 |
-|-----------|---|------|------|
-| `message` | string | ✓ | 送信するメッセージ（最大4096文字） |
-| `parseMode` | string | - | メッセージの解析モード（`HTML`, `Markdown`, `MarkdownV2`） |
-| `excludeUserIds` | string[] | - | 除外するユーザーIDの配列 |
+| フィールド       | 型       | 必須 | 説明                                                       |
+| ---------------- | -------- | ---- | ---------------------------------------------------------- |
+| `message`        | string   | ✓    | 送信するメッセージ（最大4096文字）                         |
+| `parseMode`      | string   | -    | メッセージの解析モード（`HTML`, `Markdown`, `MarkdownV2`） |
+| `excludeUserIds` | string[] | -    | 除外するユーザーIDの配列                                   |
 
 #### レスポンス
 
 **成功時 (200)**:
+
 ```json
 {
   "success": true,
@@ -141,6 +147,7 @@ curl -X POST "https://your-domain.com/admin/send-message" \
 ```
 
 **エラー時 (400)**:
+
 ```json
 {
   "success": false,
@@ -156,6 +163,7 @@ curl -X POST "https://your-domain.com/admin/send-message" \
 ```
 
 **エラー時 (500)**:
+
 ```json
 {
   "success": false,
@@ -170,6 +178,7 @@ curl -X POST "https://your-domain.com/admin/send-message" \
 #### 使用例
 
 **JSON形式**:
+
 ```bash
 curl -X POST "https://your-domain.com/admin/broadcast" \
   -H "Content-Type: application/json" \
@@ -182,6 +191,7 @@ curl -X POST "https://your-domain.com/admin/broadcast" \
 ```
 
 **フォーム形式**:
+
 ```bash
 curl -X POST "https://your-domain.com/admin/broadcast" \
   -H "X-Admin-API-Key: your-admin-api-key" \

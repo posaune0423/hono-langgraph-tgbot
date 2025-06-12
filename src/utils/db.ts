@@ -93,7 +93,10 @@ export const getUserProfileByWalletAddress = async (walletAddress: string): Prom
 /**
  * 指定したトークンの最新のOHLCVデータを指定期間分取得する
  */
-export const getTokenOHLCV = async (tokenAddress: string, limit: number = QUERY_LIMITS.DEFAULT_OHLCV_LIMIT): Promise<TokenOHLCV[]> => {
+export const getTokenOHLCV = async (
+  tokenAddress: string,
+  limit: number = QUERY_LIMITS.DEFAULT_OHLCV_LIMIT,
+): Promise<TokenOHLCV[]> => {
   const db = getDB();
   const data = await db
     .select()
@@ -302,8 +305,8 @@ export const batchUpsert = async <T extends Record<string, any>>(
   table: SchemaTable,
   data: T[],
   options: {
-    conflictTarget: string[];
-    updateFields: string[];
+    conflictTarget: Array<TableColumnNames<T>>;
+    updateFields: Array<TableColumnNames<T>>;
     batchSize?: number;
     maxConcurrency?: number;
   },
@@ -322,7 +325,9 @@ export const batchUpsert = async <T extends Record<string, any>>(
     batches.push(data.slice(i, i + batchSize));
   }
 
-  logger.info(`Processing ${data.length} records in ${batches.length} batches (size: ${batchSize}, concurrency: ${maxConcurrency})`);
+  logger.info(
+    `Processing ${data.length} records in ${batches.length} batches (size: ${batchSize}, concurrency: ${maxConcurrency})`,
+  );
 
   let totalUpserted = 0;
 
@@ -337,26 +342,29 @@ export const batchUpsert = async <T extends Record<string, any>>(
 
         // 実行時検証: conflictTargetとupdateFieldsがテーブルのカラム名と一致するかチェック
         const sampleRecord = batch[0];
-        if (sampleRecord && typeof sampleRecord === 'object') {
+        if (sampleRecord && typeof sampleRecord === "object") {
           const recordKeys = Object.keys(sampleRecord);
 
           // conflictTargetの検証
-          const invalidConflictFields = options.conflictTarget.filter(field => !recordKeys.includes(field));
+          const invalidConflictFields = options.conflictTarget.filter((field) => !recordKeys.includes(field));
           if (invalidConflictFields.length > 0) {
-            logger.warn(`Invalid conflict target fields: ${invalidConflictFields.join(', ')}`);
+            logger.warn(`Invalid conflict target fields: ${invalidConflictFields.join(", ")}`);
           }
 
           // updateFieldsの検証
-          const invalidUpdateFields = options.updateFields.filter(field => !recordKeys.includes(field));
+          const invalidUpdateFields = options.updateFields.filter((field) => !recordKeys.includes(field));
           if (invalidUpdateFields.length > 0) {
-            logger.warn(`Invalid update fields: ${invalidUpdateFields.join(', ')}`);
+            logger.warn(`Invalid update fields: ${invalidUpdateFields.join(", ")}`);
           }
         }
 
-        const updateObject = options.updateFields.reduce((acc, field) => {
-          acc[field] = sql.raw(`excluded.${field}`);
-          return acc;
-        }, {} as Record<string, any>);
+        const updateObject = options.updateFields.reduce(
+          (acc, field) => {
+            acc[field] = sql.raw(`excluded.${field}`);
+            return acc;
+          },
+          {} as Record<string, any>,
+        );
 
         const result = await db
           .insert(table)
@@ -388,14 +396,17 @@ export const batchUpsert = async <T extends Record<string, any>>(
  */
 export const cleanupOldOHLCVData = async (retentionDays: number = 30): Promise<void> => {
   const db = getDB();
-  const cutoffTimestamp = Math.floor(Date.now() / 1000) - (retentionDays * 24 * 60 * 60);
+  const cutoffTimestamp = Math.floor(Date.now() / 1000) - retentionDays * 24 * 60 * 60;
 
   const deletedRows = await db
     .delete(tokenOHLCV)
     .where(sql`${tokenOHLCV.timestamp} < ${cutoffTimestamp}`)
     .returning({ token: tokenOHLCV.token, timestamp: tokenOHLCV.timestamp });
 
-  logger.info("cleanupOldOHLCVData", `Cleaned up ${deletedRows.length} old OHLCV records older than ${retentionDays} days`);
+  logger.info(
+    "cleanupOldOHLCVData",
+    `Cleaned up ${deletedRows.length} old OHLCV records older than ${retentionDays} days`,
+  );
 };
 
 /**
@@ -422,15 +433,12 @@ export const cleanupTokenOHLCVByCount = async (tokenAddress: string, keepCount: 
 
   const deletedRows = await db
     .delete(tokenOHLCV)
-    .where(
-      and(
-        eq(tokenOHLCV.token, tokenAddress),
-        sql`${tokenOHLCV.timestamp} < ${cutoffRecord.timestamp}`
-      )
-    )
+    .where(and(eq(tokenOHLCV.token, tokenAddress), sql`${tokenOHLCV.timestamp} < ${cutoffRecord.timestamp}`))
     .returning({ token: tokenOHLCV.token, timestamp: tokenOHLCV.timestamp });
 
-  logger.info(`Cleaned up ${deletedRows.length} old OHLCV records for token ${tokenAddress}, keeping latest ${keepCount} records`);
+  logger.info(
+    `Cleaned up ${deletedRows.length} old OHLCV records for token ${tokenAddress}, keeping latest ${keepCount} records`,
+  );
 };
 
 /**
@@ -442,9 +450,7 @@ export const cleanupAllTokensOHLCVByCount = async (keepCount: number = 1000): Pr
 
   logger.info(`Starting cleanup for ${tokens.length} tokens, keeping ${keepCount} records each`);
 
-  const cleanupPromises = tokens.map(token =>
-    cleanupTokenOHLCVByCount(token.address, keepCount)
-  );
+  const cleanupPromises = tokens.map((token) => cleanupTokenOHLCVByCount(token.address, keepCount));
 
   await Promise.all(cleanupPromises);
 

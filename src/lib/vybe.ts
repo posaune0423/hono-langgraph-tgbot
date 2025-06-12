@@ -121,13 +121,13 @@ export const fetchTokenOHLCV = async (
 
     const url = `${BASE_URL}/price/${mintAddress}/token-ohlcv${params.toString() ? `?${params}` : ""}`;
 
-    logger.debug("vybe-api", `Fetching OHLCV data for ${mintAddress}`, { url, resolution, options });
+    logger.info(`Fetching OHLCV data for ${mintAddress}`, { url, resolution, options });
 
     const response = await authFetch(url);
 
     if (!response.ok) {
       const errorMessage = `HTTP ${response.status}: ${response.statusText}`;
-      logger.error("vybe-api", `Failed to fetch token OHLCV for ${mintAddress}`, {
+      logger.error(`Failed to fetch token OHLCV for ${mintAddress}`, {
         status: response.status,
         statusText: response.statusText,
       });
@@ -159,7 +159,7 @@ export const fetchTokenOHLCV = async (
       });
     }
 
-    logger.info("vybe-api", `Successfully fetched OHLCV data for ${mintAddress}`, {
+    logger.info(`Successfully fetched OHLCV data for ${mintAddress}`, {
       dataCount: result.data.length,
       resolution: result.timeframe,
     });
@@ -167,7 +167,7 @@ export const fetchTokenOHLCV = async (
     return ok(result);
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
-    logger.error("vybe-api", `Network error while fetching OHLCV for ${mintAddress}`, error);
+    logger.error(`Network error while fetching OHLCV for ${mintAddress}`, error);
 
     return err({
       type: "network",
@@ -211,10 +211,10 @@ export const fetchMultipleTokenOHLCV = async (
   // 重複チェック
   const uniqueAddresses = [...new Set(mintAddresses)];
   if (uniqueAddresses.length !== mintAddresses.length) {
-    logger.warn("vybe-api", "Duplicate mint addresses detected, removing duplicates");
+    logger.warn("Duplicate mint addresses detected, removing duplicates");
   }
 
-  logger.info("vybe-api", `Fetching OHLCV data for ${uniqueAddresses.length} tokens`, {
+  logger.info(`Fetching OHLCV data for ${uniqueAddresses.length} tokens`, {
     resolution,
     options,
     addresses: uniqueAddresses.slice(0, 5), // 最初の5個のみログ出力
@@ -239,7 +239,7 @@ export const fetchMultipleTokenOHLCV = async (
           successfulResults[mintAddress] = resultValue.value.data;
         } else {
           errors.push({ mintAddress, error: resultValue.error });
-          logger.warn("vybe-api", `Failed to fetch OHLCV for ${mintAddress}`, resultValue.error);
+          logger.warn(`Failed to fetch OHLCV for ${mintAddress}`, resultValue.error);
         }
       }
     });
@@ -256,7 +256,7 @@ export const fetchMultipleTokenOHLCV = async (
     return ok(successfulResults);
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : "Unknown error in batch processing";
-    logger.error("vybe-api", "Unexpected error in batch OHLCV fetch", error);
+    logger.error("Unexpected error in batch OHLCV fetch", error);
 
     return err({
       type: "network",

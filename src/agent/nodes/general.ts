@@ -1,6 +1,6 @@
 import { createReactAgent } from "@langchain/langgraph/prebuilt";
-import { gpt4oMini } from "../utils/model";
-import { memory, type graphState } from "../utils/state";
+import { gpt4oMini } from "../model";
+import { memory, type graphState } from "../graphState";
 import { TavilySearchResults } from "@langchain/community/tools/tavily_search";
 import type { Tool } from "@langchain/core/tools";
 import { generalPrompt } from "../prompts/general";

@@ -1,9 +1,9 @@
 import { END, START, StateGraph } from "@langchain/langgraph";
-import { graphState } from "./utils/state";
+import { graphState } from "./graphState";
 import { generalistNode } from "./nodes/general";
 import { managerNode } from "./nodes/manager";
 import { analyzerNode } from "./nodes/analyzer";
-import { managerRouter } from "./utils/route";
+import { managerRouter } from "./graphRoute";
 import { dataFetchNode } from "./nodes/dataFetch";
 
 export async function initGraph(userId: string) {
