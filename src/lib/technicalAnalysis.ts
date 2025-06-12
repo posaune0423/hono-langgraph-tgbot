@@ -9,7 +9,6 @@ import {
   ADX_CONFIG,
   RSI_CONFIG,
   TRADING_WORKFLOW_CONFIG,
-  type TradingAction,
 } from "../constants/technicalAnalysis";
 
 export type OHLCVData = {
@@ -21,7 +20,7 @@ export type OHLCVData = {
   volume: number;
 };
 
-export type PracticalAnalysisResult = {
+export type TechnicalAnalysisResult = {
   vwap?: number;
   vwapDeviation?: number; // VWAP乖離率 (%)
   obv?: number;
@@ -33,14 +32,6 @@ export type PracticalAnalysisResult = {
   adx?: number;
   adxDirection?: "UP" | "DOWN" | "NEUTRAL";
   rsi?: number; // RSI (9期間)
-};
-
-export type PracticalSignalResult = {
-  action: TradingAction;
-  indicator: string;
-  confidence: number; // 0-1 の信頼度
-  message: string;
-  metadata: Record<string, any>;
 };
 
 /**
@@ -239,7 +230,7 @@ const calculateRSI9 = (closes: number[]): number | undefined => {
 /**
  * 6つの実用的指標を計算
  */
-export const calculateTechnicalIndicators = (data: OHLCVData[]): PracticalAnalysisResult | null => {
+export const calculateTechnicalIndicators = (data: OHLCVData[]): TechnicalAnalysisResult | null => {
   if (data.length < TRADING_WORKFLOW_CONFIG.minimumDataPoints) {
     logger.warn(`Insufficient data points: ${data.length} < ${TRADING_WORKFLOW_CONFIG.minimumDataPoints}`);
     return null;
@@ -296,7 +287,7 @@ export const calculateTechnicalIndicators = (data: OHLCVData[]): PracticalAnalys
 export const convertPracticalToDbFormat = (
   token: string,
   timestamp: number,
-  analysis: PracticalAnalysisResult,
+  analysis: TechnicalAnalysisResult,
 ): NewTechnicalAnalysis => {
   return {
     id: generateId(),
@@ -313,27 +304,5 @@ export const convertPracticalToDbFormat = (
     adx: analysis.adx?.toString(),
     adx_direction: analysis.adxDirection,
     rsi: analysis.rsi?.toString(),
-  };
-};
-
-/**
- * シグナルをDB形式に変換
- */
-export const convertPracticalSignalToDbFormat = (
-  token: string,
-  timestamp: number,
-  price: number,
-  signal: PracticalSignalResult,
-): NewTradingSignal => {
-  return {
-    id: generateId(),
-    token,
-    signal_type: signal.action,
-    indicator: signal.indicator,
-    strength: signal.confidence >= 0.8 ? "STRONG" : signal.confidence >= 0.6 ? "MODERATE" : "WEAK",
-    price: price.toString(),
-    message: signal.message,
-    metadata: signal.metadata,
-    timestamp,
   };
 };
