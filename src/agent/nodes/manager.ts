@@ -1,6 +1,6 @@
 import { RunnableSequence } from "@langchain/core/runnables";
 import { gpt4o } from "../model";
-import type { graphState } from "../graphState";
+import type { graphState } from "../graph-state";
 import { prompt, parser } from "../prompts/manager";
 
 const chain = RunnableSequence.from([prompt, gpt4o, parser]);

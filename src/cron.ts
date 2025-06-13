@@ -7,9 +7,9 @@ import {
   cleanupAllTokensOHLCVByCount,
 } from "./utils/db";
 import { fetchMultipleTokenOHLCV } from "./lib/vybe";
-import { getTACache } from "./lib/technicalAnalysisCache";
+import { getTACache } from "./lib/ta-cache";
 import { tokenOHLCV } from "./db";
-import { calculateTechnicalIndicators, convertPracticalToDbFormat, type OHLCVData } from "./lib/technicalAnalysis";
+import { calculateTechnicalIndicators, convertTAtoDbFormat, type OHLCVData } from "./lib/ta";
 import { OHLCV_RETENTION } from "./constants/database";
 
 // every 5 minutes
@@ -18,6 +18,7 @@ export const runCronTasks = async () => {
 
   await updateTokenOHLCVTask();
   await technicalAnalysisTask();
+  await generateSignalTask();
 
   // 1時間おきにクリーンアップを実行（5分間隔のcronが12回実行されるごと）
   const currentMinute = new Date().getMinutes();
@@ -146,7 +147,7 @@ const technicalAnalysisTask = async () => {
 
   // テクニカル分析結果をデータベースに保存
   const analysisData = successfulResults.map((result) =>
-    convertPracticalToDbFormat(result.token.address, result.currentTimestamp, result.analysis),
+    convertTAtoDbFormat(result.token.address, result.currentTimestamp, result.analysis),
   );
 
   if (analysisData.length === 0) {
@@ -155,6 +156,11 @@ const technicalAnalysisTask = async () => {
   }
 
   await createTechnicalAnalysis(analysisData);
+};
+
+const generateSignalTask = async () => {
+  logger.info("Starting signal generation task");
+  const cache = getTACache();
 };
 
 /**

@@ -4,13 +4,13 @@
  */
 
 import { logger } from "../utils/logger";
-import type { PracticalAnalysisResult } from "./technicalAnalysis";
+import type { TechnicalAnalysisResult } from "./ta";
 
 /**
  * キャッシュされた実戦的テクニカル分析結果
  */
-interface CachedPracticalAnalysisResult {
-  analysis: PracticalAnalysisResult;
+interface CachedAnalysisResult {
+  analysis: TechnicalAnalysisResult;
   timestamp: number;
   price: number;
 }
@@ -19,15 +19,15 @@ interface CachedPracticalAnalysisResult {
  * 実戦的テクニカル分析結果のメモリキャッシュクラス
  * Cloudflare Worker環境での永続化を考慮したシンプルな実装
  */
-class PracticalTACache {
-  private cache = new Map<string, CachedPracticalAnalysisResult>();
+class TACache {
+  private cache = new Map<string, CachedAnalysisResult>();
   private readonly maxCacheSize = 1000; // 最大キャッシュサイズ
   private readonly cacheExpiryMs = 1000 * 60 * 60 * 24; // 24時間でキャッシュ期限切れ
 
   /**
    * 前回の分析結果を取得
    */
-  getPreviousAnalysis(tokenAddress: string): PracticalAnalysisResult | undefined {
+  getPreviousAnalysis(tokenAddress: string): TechnicalAnalysisResult | undefined {
     const cached = this.cache.get(tokenAddress);
 
     if (!cached) {
@@ -59,7 +59,7 @@ class PracticalTACache {
    */
   setCachedAnalysis(
     tokenAddress: string,
-    analysis: PracticalAnalysisResult,
+    analysis: TechnicalAnalysisResult,
     price: number,
     timestamp: number = Date.now(),
   ): void {
@@ -100,7 +100,7 @@ class PracticalTACache {
   /**
    * 市場状況を評価する（実用的な判断）
    */
-  private evaluateMarketCondition(analysis: PracticalAnalysisResult): string {
+  private evaluateMarketCondition(analysis: TechnicalAnalysisResult): string {
     const conditions: string[] = [];
 
     // VWAP乖離率判定
@@ -233,18 +233,18 @@ class PracticalTACache {
 }
 
 // シングルトンインスタンス
-let practicalCacheInstance: PracticalTACache | undefined;
+let cacheInstance: TACache | undefined;
 
 /**
  * 実戦的テクニカル分析キャッシュのシングルトンインスタンスを取得
  * Cloudflare Worker環境での使用を考慮した実装
  */
-export const getTACache = (): PracticalTACache => {
-  if (!practicalCacheInstance) {
-    practicalCacheInstance = new PracticalTACache();
-    logger.info("Created practical technical analysis cache instance");
+export const getTACache = (): TACache => {
+  if (!cacheInstance) {
+    cacheInstance = new TACache();
+    logger.info("Created  technical analysis cache instance");
   }
-  return practicalCacheInstance;
+  return cacheInstance;
 };
 
-export type { CachedPracticalAnalysisResult };
+export type { CachedAnalysisResult };

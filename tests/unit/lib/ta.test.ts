@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { calculateTechnicalIndicators, calculateVWAP, calculateOBV } from "../../../src/lib/technicalAnalysis";
-import type { OHLCVData } from "../../../src/lib/technicalAnalysis";
+import { calculateTechnicalIndicators, calculateVWAP, calculateOBV } from "../../../src/lib/ta";
+import type { OHLCVData } from "../../../src/lib/ta";
 
 describe("Technical Analysis - 6 Indicators System", () => {
   // 50個以上のSOLミームトークン風のモックデータ（1分足）を生成

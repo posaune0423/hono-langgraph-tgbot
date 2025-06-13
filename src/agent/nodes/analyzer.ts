@@ -1,6 +1,6 @@
 import { createReactAgent } from "@langchain/langgraph/prebuilt";
 import { gpt4oMini } from "../model";
-import { memory, graphState } from "../graphState";
+import { memory, graphState } from "../graph-state";
 import type { Tool } from "@langchain/core/tools";
 import { analyzerPrompt } from "../prompts/analyzer";
 import { logger } from "../../utils/logger";

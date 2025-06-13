@@ -1,7 +1,7 @@
 import { RSI, ATR, ADX, BollingerBands, VWAP, OBV } from "technicalindicators";
 import { logger } from "../utils/logger";
 import { generateId } from "../utils/id";
-import type { NewTechnicalAnalysis, NewTradingSignal } from "../db";
+import type { NewTechnicalAnalysis } from "../db";
 import {
   OBV_ZSCORE_CONFIG,
   PERCENT_B_CONFIG,
@@ -9,7 +9,7 @@ import {
   ADX_CONFIG,
   RSI_CONFIG,
   TRADING_WORKFLOW_CONFIG,
-} from "../constants/technicalAnalysis";
+} from "../constants/ta";
 
 export type OHLCVData = {
   timestamp: number;
@@ -282,9 +282,9 @@ export const calculateTechnicalIndicators = (data: OHLCVData[]): TechnicalAnalys
 };
 
 /**
- * 分析結果をDB形式に変換
+ * テクニカル分析結果をDB形式に変換
  */
-export const convertPracticalToDbFormat = (
+export const convertTAtoDbFormat = (
   token: string,
   timestamp: number,
   analysis: TechnicalAnalysisResult,

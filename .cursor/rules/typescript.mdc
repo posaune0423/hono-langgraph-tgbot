@@ -255,6 +255,9 @@ TypeScript でのコーディングにおける一般的なベストプラクテ
 
 7. 早期リターンを活用しnestが深く夏事を避けてください
 
+8. Naming Convention
+ - file-name: kebab case (e.g. `graph-state.ts`)
+
 ### モジュールのエクスポート
 
 #### default exportのみを使うべきケース

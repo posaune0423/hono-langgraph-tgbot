@@ -1,6 +1,6 @@
 import type { Bot, Context } from "grammy";
 import { InlineKeyboard } from "grammy";
-import { welcomeMessage } from "./messageTemplates";
+import { welcomeMessage } from "./msg-template";
 import { SetupStep } from "../../types";
 import { getUserProfile, updateUserProfile, upsertUserProfile, clearChatHistory } from "../../utils/db";
 import { NewUser } from "../../db";

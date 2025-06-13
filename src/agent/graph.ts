@@ -1,10 +1,10 @@
 import { END, START, StateGraph } from "@langchain/langgraph";
-import { graphState } from "./graphState";
+import { graphState } from "./graph-state";
 import { generalistNode } from "./nodes/general";
 import { managerNode } from "./nodes/manager";
 import { analyzerNode } from "./nodes/analyzer";
-import { managerRouter } from "./graphRoute";
-import { dataFetchNode } from "./nodes/dataFetch";
+import { managerRouter } from "./graph-route";
+import { dataFetchNode } from "./nodes/data-fetch";
 
 export async function initGraph(userId: string) {
   try {
