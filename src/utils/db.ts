@@ -8,15 +8,12 @@ import {
   users,
   tokenOHLCV,
   technicalAnalysis,
-  tradingSignals,
   type NewTechnicalAnalysis,
-  type NewTradingSignal,
   type TechnicalAnalysis,
   type TokenOHLCV,
   tokens,
   NewToken,
   chatHistory,
-  type ChatMessage,
   type NewChatMessage,
 } from "../db";
 import { logger } from "./logger";
@@ -146,64 +143,6 @@ export const createTechnicalAnalysis = async (data: NewTechnicalAnalysis[]): Pro
       "rsi",
     ],
   });
-};
-
-/**
- * 取引シグナルを保存する
- */
-export const createTradingSignals = async (data: NewTradingSignal[]): Promise<void> => {
-  if (data.length === 0) return;
-
-  await batchUpsert(tradingSignals, data, {
-    conflictTarget: ["id"],
-    updateFields: ["signal_type", "indicator", "strength", "price", "message", "metadata"],
-  });
-};
-
-/**
- * 最新の重要なシグナルを取得する（過去24時間以内）
- */
-export const getRecentImportantSignals = async (
-  sinceTimestamp?: number,
-): Promise<
-  Array<{
-    token: string;
-    signal_type: string;
-    indicator: string;
-    strength: string;
-    price: string;
-    message: string;
-    metadata: Record<string, any> | null;
-    timestamp: number;
-    tokenName?: string;
-    tokenSymbol?: string;
-  }>
-> => {
-  const twentyFourHoursAgo = sinceTimestamp || Math.floor(Date.now() / 1000) - 24 * 60 * 60;
-
-  // STRONGまたはMODERATEのシグナルのみを取得
-  const db = getDB();
-  const signals = await db
-    .select({
-      token: tradingSignals.token,
-      signal_type: tradingSignals.signal_type,
-      indicator: tradingSignals.indicator,
-      strength: tradingSignals.strength,
-      price: tradingSignals.price,
-      message: tradingSignals.message,
-      metadata: tradingSignals.metadata,
-      timestamp: tradingSignals.timestamp,
-    })
-    .from(tradingSignals)
-    .where(
-      and(
-        sql`${tradingSignals.timestamp} >= ${twentyFourHoursAgo}`,
-        sql`${tradingSignals.strength} IN ('STRONG', 'MODERATE')`,
-      ),
-    )
-    .orderBy(desc(tradingSignals.timestamp));
-
-  return signals;
 };
 
 /**
