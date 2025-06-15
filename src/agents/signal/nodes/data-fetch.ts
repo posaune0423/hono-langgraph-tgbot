@@ -1,5 +1,5 @@
-import { getAssetsByOwner } from "../../lib/helius";
-import { logger } from "../../utils/logger";
+import { getAssetsByOwner } from "../../../lib/helius";
+import { logger } from "../../../utils/logger";
 import type { graphState } from "../graph-state";
 
 // This node is just for connecting other data fetching nodes so that they can be called in parallel

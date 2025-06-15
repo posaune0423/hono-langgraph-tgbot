@@ -6,7 +6,7 @@ import { analyzerNode } from "./nodes/analyzer";
 import { managerRouter } from "./graph-route";
 import { dataFetchNode } from "./nodes/data-fetch";
 
-export async function initGraph(userId: string) {
+export async function initTelegramGraph(userId: string) {
   try {
     const config = { configurable: { thread_id: userId } };
 

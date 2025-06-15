@@ -13,7 +13,7 @@ import {
   type TokenOHLCV,
   tokens,
   NewToken,
-  chatHistory,
+  chatMessages,
   type NewChatMessage,
 } from "../db";
 import { logger } from "./logger";
@@ -152,9 +152,9 @@ export const getChatHistory = async (userId: string, limit: number = 100): Promi
   const db = getDB();
   const messages = await db
     .select()
-    .from(chatHistory)
-    .where(eq(chatHistory.userId, userId))
-    .orderBy(desc(chatHistory.timestamp))
+    .from(chatMessages)
+    .where(eq(chatMessages.userId, userId))
+    .orderBy(desc(chatMessages.timestamp))
     .limit(limit);
 
   // 時系列順にソート（古い順）
@@ -186,7 +186,7 @@ export const saveChatMessage = async (userId: string, message: BaseMessage): Pro
     messageType,
   };
 
-  await db.insert(chatHistory).values(newMessage);
+  await db.insert(chatMessages).values(newMessage);
   logger.info(`Saved ${messageType} message for user ${userId}`);
 };
 
@@ -195,7 +195,7 @@ export const saveChatMessage = async (userId: string, message: BaseMessage): Pro
  */
 export const clearChatHistory = async (userId: string): Promise<void> => {
   const db = getDB();
-  await db.delete(chatHistory).where(eq(chatHistory.userId, userId));
+  await db.delete(chatMessages).where(eq(chatMessages.userId, userId));
   logger.info(`Cleared chat history for user ${userId}`);
 };
 
@@ -236,8 +236,8 @@ export interface BatchUpsertOptions<TTable extends SchemaTable> {
  * @param data 挿入するデータの配列
  * @param options バッチ処理オプション
  */
-// schemaから動的に全テーブルの型を生成
-type SchemaTable = (typeof schema)[keyof typeof schema];
+// schemaから動的に全テーブルの型を生成（Relationを除外）
+type SchemaTable = typeof users | typeof tokenOHLCV | typeof technicalAnalysis | typeof tokens | typeof chatMessages;
 
 export const batchUpsert = async <T extends Record<string, any>>(
   table: SchemaTable,
@@ -304,7 +304,7 @@ export const batchUpsert = async <T extends Record<string, any>>(
           {} as Record<string, any>,
         );
 
-        const result = await db
+        await db
           .insert(table)
           .values(batch)
           .onConflictDoUpdate({

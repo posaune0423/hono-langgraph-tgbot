@@ -3,7 +3,7 @@ import { gpt4oMini } from "../model";
 import { memory, graphState } from "../graph-state";
 import type { Tool } from "@langchain/core/tools";
 import { analyzerPrompt } from "../prompts/analyzer";
-import { logger } from "../../utils/logger";
+import { logger } from "../../../utils/logger";
 
 // Initialize tools array
 const tools: Tool[] = [];

@@ -11,31 +11,34 @@
     "db:seed": "bun --env-file=.dev.vars run scripts/seed.ts",
     "build": "tsup src/**/*.ts --dts --format esm",
     "format": "prettier --write .",
-    "test": "dotenvx run -f .dev.vars -- vitest run"
+    "test": "dotenvx run -f .dev.vars -- vitest run",
+    "test:unit": "dotenvx run -f .dev.vars -- vitest run tests/unit",
+    "test:integration": "dotenvx run -f .dev.vars -- vitest run tests/integration"
   },
   "dependencies": {
-    "@langchain/community": "^0.3.45",
-    "@langchain/core": "^0.3.57",
-    "@langchain/langgraph": "^0.3.0",
-    "@langchain/openai": "^0.5.11",
-    "@neondatabase/serverless": "^1.0.0",
+    "@langchain/community": "^0.3.46",
+    "@langchain/core": "^0.3.58",
+    "@langchain/langgraph": "^0.3.3",
+    "@langchain/openai": "^0.5.13",
+    "@neondatabase/serverless": "^1.0.1",
     "@solana/web3.js": "^1.98.2",
-    "drizzle-orm": "^0.44.1",
+    "drizzle-orm": "^0.44.2",
     "grammy": "^1.36.3",
     "helius-sdk": "^1.5.1",
     "hono": "^4.7.11",
     "neverthrow": "^8.2.0",
     "pg": "^8.16.0",
-    "technicalindicators": "^3.1.0"
+    "technicalindicators": "^3.1.0",
+    "zod": "^3.25.64"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20250604.0",
+    "@cloudflare/workers-types": "^4.20250614.0",
     "@types/pg": "^8.15.4",
     "drizzle-kit": "^0.31.1",
     "prettier": "^3.5.3",
     "tsup": "^8.5.0",
-    "vitest": "^3.2.2",
-    "wrangler": "^4.19.1"
+    "vitest": "^3.2.3",
+    "wrangler": "^4.20.0"
   },
   "prettier": {
     "semi": true,

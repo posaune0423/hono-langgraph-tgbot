@@ -16,15 +16,17 @@ import { OHLCV_RETENTION } from "./constants/database";
 export const runCronTasks = async () => {
   logger.info(`cron start: ${new Date().toISOString()}`);
 
+  // 1. トークンのOHLCVデータを更新
   await updateTokenOHLCVTask();
+
+  // 2. テクニカル分析を実行
   await technicalAnalysisTask();
+
+  // 3. シグナルを生成
   await generateSignalTask();
 
   // 1時間おきにクリーンアップを実行（5分間隔のcronが12回実行されるごと）
-  const currentMinute = new Date().getMinutes();
-  if (currentMinute === 0) {
-    await cleanupOHLCVTask();
-  }
+  if (new Date().getMinutes() === 0) await cleanupOHLCVTask();
 
   logger.info(`cron end: ${new Date().toISOString()}`);
 };

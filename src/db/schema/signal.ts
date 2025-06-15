@@ -12,6 +12,11 @@ export const signal = pgTable(
       .references(() => tokens.address),
     signalType: text("signal_type").notNull(), // "HACK_NEWS", "RSI_OVERBOUGHT", etc.
     value: json("value"), // { "rsi": 72, ... } or { "headline": "...", ... }
+
+    // ユーザー向け表示用（Telegram markdown対応）
+    title: text("title").notNull(), // "🚨 $RAY Price Alert: -5.2% Drop"
+    body: text("body").notNull(),   // Telegram markdown + data_source links
+
     direction: text("direction"), // "BUY", "SELL", "NEUTRAL"（optional）
     confidence: numeric("confidence"), // 0.0-1.0
     explanation: text("explanation"), // LLM生成の自然言語説明

@@ -1,5 +1,5 @@
 import type { Bot, Context } from "grammy";
-import { initGraph } from "../../agent/graph";
+import { initTelegramGraph } from "../../agents/telegram/graph";
 import { HumanMessage, AIMessage } from "@langchain/core/messages";
 import type { StreamChunk } from "../../types";
 import { logger } from "../../utils/logger";
@@ -153,7 +153,7 @@ export const setupHandler = (bot: Bot) => {
       const thinkingMessage = await ctx.reply("🧠 Thinking...");
 
       // initialize graph
-      const { agent, config } = await initGraph(userId);
+      const { agent, config } = await initTelegramGraph(userId);
       logger.debug("message handler", "Initialized Graph");
 
       // Load chat history from database
