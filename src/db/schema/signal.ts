@@ -15,7 +15,7 @@ export const signal = pgTable(
 
     // ユーザー向け表示用（Telegram markdown対応）
     title: text("title").notNull(), // "🚨 $RAY Price Alert: -5.2% Drop"
-    body: text("body").notNull(),   // Telegram markdown + data_source links
+    body: text("body").notNull(), // Telegram markdown + data_source links
 
     direction: text("direction"), // "BUY", "SELL", "NEUTRAL"（optional）
     confidence: numeric("confidence"), // 0.0-1.0

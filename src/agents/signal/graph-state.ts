@@ -1,50 +1,77 @@
-import { Annotation, MemorySaver } from "@langchain/langgraph";
-import type { BaseMessage } from "@langchain/core/messages";
-import { messagesStateReducer } from "@langchain/langgraph";
-import type { User } from "../../db";
-import type { DAS } from "helius-sdk";
+import { Annotation } from "@langchain/langgraph";
+import type { TechnicalAnalysis } from "../../db/schema/technical-analysis";
 
-export const memory = new MemorySaver();
-
-export const graphState = Annotation.Root({
-  messages: Annotation<BaseMessage[]>({
-    reducer: messagesStateReducer,
-    default: () => [],
+/**
+ * Signal Generator Graph State
+ *
+ * シグナル生成プロセスの状態管理
+ * - 入力データ（トークン情報、テクニカル分析結果）
+ * - 各ステップの処理結果
+ * - 最終的なシグナル出力
+ */
+export const signalGraphState = Annotation.Root({
+  // === Input Data ===
+  tokenAddress: Annotation<string>({
+    reducer: (x, y) => y ?? x,
   }),
 
-  userAssets: Annotation<DAS.GetAssetResponse[]>({
-    reducer: (oldValue, newValue) => newValue ?? oldValue,
-    default: () => [],
+  tokenSymbol: Annotation<string>({
+    reducer: (x, y) => y ?? x,
   }),
 
-  userProfile: Annotation<User | null>({
-    reducer: (oldValue, newValue) => newValue ?? oldValue,
-    default: () => null,
+  currentPrice: Annotation<number>({
+    reducer: (x, y) => y ?? x,
   }),
 
-  isDataFetchNodeQuery: Annotation<boolean>({
-    reducer: (oldValue, newValue) => newValue ?? oldValue,
-    default: () => false,
+  technicalAnalysis: Annotation<TechnicalAnalysis>({
+    reducer: (x, y) => y ?? x,
   }),
 
-  isGeneralQuery: Annotation<boolean>({
-    reducer: (oldValue, newValue) => newValue ?? oldValue,
-    default: () => false,
+  // === Static Filter Results ===
+  staticFilterResult: Annotation<{
+    shouldProceed: boolean;
+    triggeredIndicators: string[];
+    signalCandidates: string[];
+    confluenceScore: number;
+    riskLevel: "LOW" | "MEDIUM" | "HIGH";
+  }>({
+    reducer: (x, y) => y ?? x,
   }),
 
-  // Signal生成用の追加フィールド
-  token: Annotation<string | null>({
-    reducer: (oldValue, newValue) => newValue ?? oldValue,
-    default: () => null,
+  // === LLM Analysis Results ===
+  signalDecision: Annotation<{
+    shouldGenerateSignal: boolean;
+    signalType: string;
+    direction: "BUY" | "SELL" | "NEUTRAL";
+    confidence: number;
+    reasoning: string;
+    keyFactors: string[];
+    riskLevel: "LOW" | "MEDIUM" | "HIGH";
+    timeframe: "SHORT" | "MEDIUM" | "LONG";
+  }>({
+    reducer: (x, y) => y ?? x,
   }),
 
-  collectedData: Annotation<any[]>({
-    reducer: (oldValue, newValue) => newValue ?? oldValue,
-    default: () => [],
+  // === Evidence Search Results (for future implementation) ===
+  evidenceResults: Annotation<{
+    relevantSources: any[];
+    overallConfidence: number;
+    primaryCause: string;
+    recommendation: "INCLUDE" | "EXCLUDE" | "UNCERTAIN";
+  }>({
+    reducer: (x, y) => y ?? x,
   }),
 
-  generatedSignal: Annotation<any | null>({
-    reducer: (oldValue, newValue) => newValue ?? oldValue,
-    default: () => null,
+  // === Final Output ===
+  finalSignal: Annotation<{
+    level: 1 | 2 | 3;
+    title: string;
+    message: string;
+    priority: "LOW" | "MEDIUM" | "HIGH";
+    tags: string[];
+  }>({
+    reducer: (x, y) => y ?? x,
   }),
 });
+
+export type SignalGraphState = typeof signalGraphState.State;

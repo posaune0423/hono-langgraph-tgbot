@@ -160,9 +160,137 @@ const technicalAnalysisTask = async () => {
   await createTechnicalAnalysis(analysisData);
 };
 
+/**
+ * 個別トークンのシグナル生成処理
+ */
+const processTokenSignal = async (analysis: any, db: any) => {
+  // トークン情報を取得
+  const { tokens, tokenOHLCV, signal } = await import("./db");
+  const { eq, desc } = await import("drizzle-orm");
+
+  const tokenInfo = await db.select().from(tokens).where(eq(tokens.address, analysis.token)).limit(1);
+
+  if (tokenInfo.length === 0) {
+    logger.warn("Token not found", { tokenAddress: analysis.token });
+    return null;
+  }
+
+  const token = tokenInfo[0];
+
+  // 現在価格を取得（最新のOHLCVから）
+  const latestOHLCV = await db
+    .select()
+    .from(tokenOHLCV)
+    .where(eq(tokenOHLCV.token, analysis.token))
+    .orderBy(desc(tokenOHLCV.timestamp))
+    .limit(1);
+
+  if (latestOHLCV.length === 0) {
+    logger.warn("No OHLCV data found", { tokenAddress: analysis.token });
+    return null;
+  }
+
+  const currentPrice = parseFloat(latestOHLCV[0].close);
+
+  // Signal Generator実行
+  const { generateSignal } = await import("./agents/signal/graph");
+  const result = await generateSignal({
+    tokenAddress: analysis.token,
+    tokenSymbol: token.symbol,
+    currentPrice,
+    technicalAnalysis: analysis,
+  });
+
+  // シグナルが生成されなかった場合は早期リターン
+  if (!result.finalSignal || result.finalSignal.level < 1) {
+    return null;
+  }
+
+  // DBに保存
+  const signalId = `signal_${analysis.token}_${Date.now()}`;
+
+  await db.insert(signal).values({
+    id: signalId,
+    token: analysis.token,
+    signalType: result.signalDecision?.signalType || "TECHNICAL_ALERT",
+    title: result.finalSignal.title,
+    body: result.finalSignal.message,
+    direction: result.signalDecision?.direction || "NEUTRAL",
+    confidence: result.signalDecision?.confidence?.toString() || "0",
+    explanation: result.signalDecision?.reasoning || "",
+    timestamp: new Date(),
+    value: {
+      level: result.finalSignal.level,
+      priority: result.finalSignal.priority,
+      tags: result.finalSignal.tags,
+      technicalAnalysisId: analysis.id,
+      staticFilterResult: result.staticFilterResult,
+    },
+  });
+
+  logger.info("Signal generated and saved", {
+    signalId,
+    tokenAddress: analysis.token,
+    tokenSymbol: token.symbol,
+    signalType: result.signalDecision?.signalType,
+    level: result.finalSignal.level,
+    priority: result.finalSignal.priority,
+  });
+
+  return {
+    signalId,
+    token: token.symbol,
+    message: result.finalSignal.message,
+  };
+};
+
 const generateSignalTask = async () => {
   logger.info("Starting signal generation task");
-  const cache = getTACache();
+
+  try {
+    // 最新のテクニカル分析データを取得
+    const { technicalAnalysis, getDB } = await import("./db");
+    const { desc } = await import("drizzle-orm");
+    const db = getDB();
+
+    const latestAnalyses = await db
+      .select()
+      .from(technicalAnalysis)
+      .orderBy(desc(technicalAnalysis.timestamp))
+      .limit(10); // 最新10件のトークンを対象
+
+    if (latestAnalyses.length === 0) {
+      logger.info("No technical analysis data found for signal generation");
+      return;
+    }
+
+    // 各トークンに対してシグナル生成を並列実行
+    const signalPromises = latestAnalyses.map(async (analysis) => {
+      try {
+        return await processTokenSignal(analysis, db);
+      } catch (error) {
+        logger.error("Signal generation failed for token", {
+          tokenAddress: analysis.token,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        return null;
+      }
+    });
+
+    // 並列実行して結果を取得
+    const results = await Promise.all(signalPromises);
+    const generatedSignals = results.filter((result) => result !== null);
+
+    logger.info("Signal generation task completed", {
+      totalAnalyzed: latestAnalyses.length,
+      signalsGenerated: generatedSignals.length,
+      signals: generatedSignals.map((s) => ({ id: s?.signalId, token: s?.token })),
+    });
+  } catch (error) {
+    logger.error("Signal generation task failed", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
 };
 
 /**
