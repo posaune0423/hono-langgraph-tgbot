@@ -2,7 +2,6 @@ import { eq, notInArray, sql, desc, and } from "drizzle-orm";
 import {
   getDB,
   type NewUser,
-  schema,
   Token,
   User,
   users,
@@ -15,6 +14,9 @@ import {
   NewToken,
   chatMessages,
   type NewChatMessage,
+  signal,
+  NewSignal,
+  Signal,
 } from "../db";
 import { logger } from "./logger";
 import { HumanMessage, AIMessage, type BaseMessage } from "@langchain/core/messages";
@@ -143,6 +145,12 @@ export const createTechnicalAnalysis = async (data: NewTechnicalAnalysis[]): Pro
       "rsi",
     ],
   });
+};
+
+export const createSignal = async (signalData: NewSignal): Promise<Signal> => {
+  const db = getDB();
+  const [createdSignal] = await db.insert(signal).values(signalData).returning();
+  return createdSignal;
 };
 
 /**

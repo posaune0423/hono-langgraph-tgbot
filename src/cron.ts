@@ -5,6 +5,7 @@ import {
   getTokenOHLCV,
   createTechnicalAnalysis,
   cleanupAllTokensOHLCVByCount,
+  createSignal,
 } from "./utils/db";
 import { fetchMultipleTokenOHLCV } from "./lib/vybe";
 import { getTACache } from "./lib/ta-cache";
@@ -209,7 +210,7 @@ const processTokenSignal = async (analysis: any, db: any) => {
   // DBに保存
   const signalId = `signal_${analysis.token}_${Date.now()}`;
 
-  await db.insert(signal).values({
+  const createdSignal = await createSignal({
     id: signalId,
     token: analysis.token,
     signalType: result.signalDecision?.signalType || "TECHNICAL_ALERT",
@@ -229,7 +230,7 @@ const processTokenSignal = async (analysis: any, db: any) => {
   });
 
   logger.info("Signal generated and saved", {
-    signalId,
+    signalId: createdSignal.id,
     tokenAddress: analysis.token,
     tokenSymbol: token.symbol,
     signalType: result.signalDecision?.signalType,
@@ -238,7 +239,7 @@ const processTokenSignal = async (analysis: any, db: any) => {
   });
 
   return {
-    signalId,
+    signalId: createdSignal.id,
     token: token.symbol,
     message: result.finalSignal.message,
   };

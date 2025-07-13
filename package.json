@@ -16,29 +16,29 @@
     "test:integration": "dotenvx run -f .dev.vars -- vitest run tests/integration"
   },
   "dependencies": {
-    "@langchain/community": "^0.3.46",
-    "@langchain/core": "^0.3.58",
-    "@langchain/langgraph": "^0.3.3",
-    "@langchain/openai": "^0.5.13",
+    "@langchain/community": "^0.3.48",
+    "@langchain/core": "^0.3.62",
+    "@langchain/langgraph": "^0.3.8",
+    "@langchain/openai": "^0.5.18",
     "@neondatabase/serverless": "^1.0.1",
     "@solana/web3.js": "^1.98.2",
     "drizzle-orm": "^0.44.2",
-    "grammy": "^1.36.3",
+    "grammy": "^1.37.0",
     "helius-sdk": "^1.5.1",
-    "hono": "^4.7.11",
+    "hono": "^4.8.4",
     "neverthrow": "^8.2.0",
-    "pg": "^8.16.0",
+    "pg": "^8.16.3",
     "technicalindicators": "^3.1.0",
-    "zod": "^3.25.64"
+    "zod": "^3.25.76"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20250614.0",
+    "@cloudflare/workers-types": "^4.20250712.0",
     "@types/pg": "^8.15.4",
-    "drizzle-kit": "^0.31.1",
-    "prettier": "^3.5.3",
+    "drizzle-kit": "^0.31.4",
+    "prettier": "^3.6.2",
     "tsup": "^8.5.0",
-    "vitest": "^3.2.3",
-    "wrangler": "^4.20.0"
+    "vitest": "^3.2.4",
+    "wrangler": "^4.24.3"
   },
   "prettier": {
     "semi": true,
