@@ -18,6 +18,7 @@ export const signalAnalysisPrompt = new PromptTemplate({
     "tokenSymbol",
     "tokenAddress",
     "currentPrice",
+    "timestamp",
     "rsi",
     "vwapDeviation",
     "percentB",

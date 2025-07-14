@@ -126,10 +126,14 @@ export const getLatestTechnicalAnalysis = async (tokenAddress: string): Promise<
 /**
  * テクニカル分析データを保存する
  */
-export const createTechnicalAnalysis = async (data: NewTechnicalAnalysis[]): Promise<void> => {
-  if (data.length === 0) return;
+export const createTechnicalAnalysis = async (
+  data: NewTechnicalAnalysis[],
+): Promise<{ success: boolean; totalUpserted: number; hasErrors: boolean }> => {
+  if (data.length === 0) {
+    return { success: true, totalUpserted: 0, hasErrors: false };
+  }
 
-  await batchUpsert(technicalAnalysis, data, {
+  const result = await batchUpsert(technicalAnalysis, data, {
     conflictTarget: ["id"],
     updateFields: [
       "vwap",
@@ -145,6 +149,12 @@ export const createTechnicalAnalysis = async (data: NewTechnicalAnalysis[]): Pro
       "rsi",
     ],
   });
+
+  return {
+    success: !result.hasErrors,
+    totalUpserted: result.totalUpserted,
+    hasErrors: result.hasErrors,
+  };
 };
 
 export const createSignal = async (signalData: NewSignal): Promise<Signal> => {
@@ -256,10 +266,10 @@ export const batchUpsert = async <T extends Record<string, any>>(
     batchSize?: number;
     maxConcurrency?: number;
   },
-): Promise<{ totalUpserted: number; batchCount: number }> => {
+): Promise<{ totalUpserted: number; batchCount: number; failedBatches: number; hasErrors: boolean }> => {
   if (!data || data.length === 0) {
     logger.warn("No data provided for batch upsert");
-    return { totalUpserted: 0, batchCount: 0 };
+    return { totalUpserted: 0, batchCount: 0, failedBatches: 0, hasErrors: false };
   }
 
   const batchSize = options.batchSize || BATCH_PROCESSING.DEFAULT_BATCH_SIZE;
@@ -276,6 +286,7 @@ export const batchUpsert = async <T extends Record<string, any>>(
   );
 
   let totalUpserted = 0;
+  let failedBatches = 0;
 
   // バッチを並行処理（制限付き）
   for (let i = 0; i < batches.length; i += maxConcurrency) {
@@ -321,19 +332,44 @@ export const batchUpsert = async <T extends Record<string, any>>(
           });
 
         logger.info(`Batch ${batchNumber}/${batches.length} completed: ${batch.length} records`);
-        return batch.length;
+        return { success: true, count: batch.length };
       } catch (error) {
-        logger.error(`Batch ${batchNumber} failed:`, error);
-        throw error;
+        logger.error(`Batch ${batchNumber}/${batches.length} failed:`, {
+          error: error instanceof Error ? error.message : String(error),
+          batchSize: batch.length,
+          firstRecord: batch[0] ? JSON.stringify(batch[0]).substring(0, 200) : "N/A",
+        });
+
+        // エラーが発生してもthrowしない、結果オブジェクトを返す
+        return { success: false, count: 0 };
       }
     });
 
+    // Promise.allを使って、個別のバッチエラーでも他のバッチを継続
     const batchResults = await Promise.all(batchPromises);
-    totalUpserted += batchResults.reduce((sum, count) => sum + count, 0);
+
+    // 結果を集計
+    batchResults.forEach((result) => {
+      if (result.success) {
+        totalUpserted += result.count;
+      } else {
+        failedBatches++;
+      }
+    });
   }
 
-  logger.info(`Successfully upserted ${totalUpserted} records in ${batches.length} batches`);
-  return { totalUpserted, batchCount: batches.length };
+  const hasErrors = failedBatches > 0;
+  const successfulBatches = batches.length - failedBatches;
+
+  if (hasErrors) {
+    logger.warn(
+      `Batch upsert completed with errors: ${successfulBatches}/${batches.length} batches successful, ${totalUpserted} records processed`,
+    );
+  } else {
+    logger.info(`Successfully upserted ${totalUpserted} records in ${batches.length} batches`);
+  }
+
+  return { totalUpserted, batchCount: batches.length, failedBatches, hasErrors };
 };
 
 /**

@@ -29,17 +29,18 @@ describe("Vybe Network API Client - Integration Tests", () => {
         // データが存在する場合、構造をチェック
         if (result.value.data.length > 0) {
           const firstData = result.value.data[0];
-          expect(firstData).toHaveProperty("date");
+          expect(firstData).toHaveProperty("time");
           expect(firstData).toHaveProperty("open");
           expect(firstData).toHaveProperty("high");
           expect(firstData).toHaveProperty("low");
           expect(firstData).toHaveProperty("close");
           expect(firstData).toHaveProperty("volume");
-          expect(typeof firstData.open).toBe("number");
-          expect(typeof firstData.high).toBe("number");
-          expect(typeof firstData.low).toBe("number");
-          expect(typeof firstData.close).toBe("number");
-          expect(typeof firstData.volume).toBe("number");
+          expect(typeof firstData.time).toBe("number");
+          expect(typeof firstData.open).toBe("string");
+          expect(typeof firstData.high).toBe("string");
+          expect(typeof firstData.low).toBe("string");
+          expect(typeof firstData.close).toBe("string");
+          expect(typeof firstData.volume).toBe("string");
         }
       }
     }, 10000); // 10秒のタイムアウト

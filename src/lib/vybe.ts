@@ -164,7 +164,15 @@ export const fetchTokenOHLCV = async (
       resolution: result.timeframe,
     });
 
-    return ok(result);
+    // API response doesn't include timeframe and mintAddress, so we add them
+    const responseWithMeta: VybeTokenOHLCVResponse = {
+      ...result,
+      timeframe: resolution,
+      mintAddress: mintAddress,
+      success: true,
+    };
+
+    return ok(responseWithMeta);
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
     logger.error(`Network error while fetching OHLCV for ${mintAddress}`, error);
@@ -212,6 +220,25 @@ export const fetchMultipleTokenOHLCV = async (
   const uniqueAddresses = [...new Set(mintAddresses)];
   if (uniqueAddresses.length !== mintAddresses.length) {
     logger.warn("Duplicate mint addresses detected, removing duplicates");
+  }
+
+  // 事前バリデーション: 無効なアドレスがある場合は即座にエラーを返す
+  for (const mintAddress of uniqueAddresses) {
+    if (!mintAddress.trim()) {
+      return err({
+        type: "validation",
+        message: "mintAddress is required and cannot be empty",
+        mintAddress,
+      });
+    }
+
+    if (!isValidSolanaAddress(mintAddress)) {
+      return err({
+        type: "validation",
+        message: "mintAddress must be a valid Solana address",
+        mintAddress,
+      });
+    }
   }
 
   logger.info(`Fetching OHLCV data for ${uniqueAddresses.length} tokens`, {

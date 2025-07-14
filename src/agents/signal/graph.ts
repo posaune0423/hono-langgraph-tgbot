@@ -33,6 +33,23 @@ export const createSignalGeneratorGraph = () => {
 };
 
 /**
+ * Initialize Signal Graph
+ *
+ * テスト用に Signal Graph を初期化する関数
+ * エージェントとconfigオブジェクトを返す
+ */
+export const initSignalGraph = async (token: string) => {
+  const agent = createSignalGeneratorGraph();
+  const config = {
+    configurable: {
+      thread_id: `signal_${token}`,
+    },
+  };
+
+  return { agent, config };
+};
+
+/**
  * Signal Generator実行関数
  *
  * cronタスクから呼び出されるメイン関数

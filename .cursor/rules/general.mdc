@@ -36,3 +36,4 @@ alwaysApply: true
 ## 注意
 - `console.log`ではなく腐敗防止層かつcolorrisedされたloggerを使用して下さい
 - あまり小難しいことをしすぎないで、指示にsimpleに素直に従ってください。advancedなことをする場合はまずsimpleな実装をした後、私に確認を取ってください。
+- 常に指示に対し、必要十分な変更を行い、リファクタや追加のupgradeなどは別のthread, taskに切り出してやるようにして下さい。
