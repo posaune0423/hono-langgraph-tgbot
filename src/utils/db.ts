@@ -1,4 +1,4 @@
-import { eq, notInArray, sql, desc, and } from "drizzle-orm";
+import { eq, notInArray, sql, desc, and, getTableName } from "drizzle-orm";
 import {
   getDB,
   type NewUser,
@@ -710,7 +710,7 @@ export const batchUpsert = async <T extends Record<string, any>>(
           firstRecord: batch[0] ? JSON.stringify(batch[0]).substring(0, 500) : "N/A",
           conflictTarget: options.conflictTarget,
           updateFields: options.updateFields,
-          tableName: (table as any)._.name || "unknown",
+          tableName: getTableName(table),
         });
 
         // データの詳細をデバッグ出力
