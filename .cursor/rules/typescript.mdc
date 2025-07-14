@@ -253,10 +253,12 @@ TypeScript でのコーディングにおける一般的なベストプラクテ
 6. 例外処理
   - try-catchを多用しすぎないでください。必ず必要な箇所のみに使用し、ある処理の例外を一番外側の実装でcatchできるようにしてください
 
-7. 早期リターンを活用しnestが深く夏事を避けてください
+7. 早期リターンを活用しnestが深くなることを避けてください
 
 8. Naming Convention
  - file-name: kebab case (e.g. `graph-state.ts`)
+
+9. `??`や`?.`などのoptional chainingを活用し、冗長な関数の作成などを避け、simpleな記述、readableかつsemanticな記述を心がけて下さい
 
 ### モジュールのエクスポート
 

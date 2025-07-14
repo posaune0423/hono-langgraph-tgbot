@@ -152,6 +152,10 @@ export const setupHandler = (bot: Bot) => {
       // If user has completed setup or is not in setup process, handle as normal conversation
       const thinkingMessage = await ctx.reply("🧠 Thinking...");
 
+      // Add current user message to history and save to database
+      const currentUserMessage = new HumanMessage(ctx.message.text);
+      await saveChatMessage(userId, currentUserMessage);
+
       // initialize graph
       const { agent, config } = await initTelegramGraph(userId);
       logger.debug("message handler", "Initialized Graph");
@@ -159,17 +163,13 @@ export const setupHandler = (bot: Bot) => {
       // Load chat history from database
       const userChatHistory = await getChatHistory(userId);
 
-      // Add current user message to history
-      const currentUserMessage = new HumanMessage(ctx.message.text);
-      await saveChatMessage(userId, currentUserMessage);
-
       // analyzerまたはgeneralistのメッセージを格納する変数
       let latestAgentMessage: string | null = null;
 
       // send user message to agent
       const stream = await agent.stream(
         {
-          messages: [...userChatHistory, currentUserMessage],
+          messages: userChatHistory,
           userProfile: profile,
         },
         config,
@@ -198,26 +198,46 @@ export const setupHandler = (bot: Bot) => {
           }
 
           dumpTokenUsage(chunk);
+        }
 
-          // latestAgentMessageが取得できた場合の処理
-          if (latestAgentMessage) {
-            if (!ctx.chat?.id) return;
-            await ctx.api.deleteMessage(ctx.chat.id, thinkingMessage.message_id);
-            await ctx.reply(latestAgentMessage, {
-              parse_mode: "Markdown",
-            });
+                // Process the final response
+        if (latestAgentMessage) {
+          if (!ctx.chat?.id) return;
+          await ctx.api.deleteMessage(ctx.chat.id, thinkingMessage.message_id);
+          await ctx.reply(latestAgentMessage, {
+            parse_mode: "Markdown",
+          });
 
-            // Save AI message to database
-            const aiMessage = new AIMessage(latestAgentMessage);
-            await saveChatMessage(userId, aiMessage);
-          }
+          // Save AI message to database
+          const aiMessage = new AIMessage(latestAgentMessage);
+          await saveChatMessage(userId, aiMessage);
+        } else {
+          // No response from agent
+          if (!ctx.chat?.id) return;
+          await ctx.api.deleteMessage(ctx.chat.id, thinkingMessage.message_id);
+          await ctx.reply("I'm sorry, I couldn't process your request at the moment. Please try again.");
+
+          // Save error response to database
+          const errorMessage = new AIMessage("I'm sorry, I couldn't process your request at the moment. Please try again.");
+          await saveChatMessage(userId, errorMessage);
         }
       } catch (error: unknown) {
+        if (!ctx.chat?.id) return;
+        await ctx.api.deleteMessage(ctx.chat.id, thinkingMessage.message_id);
+
         if (error instanceof Error && error.message === "Timeout") {
           await ctx.reply("I'm sorry, the operation took too long and timed out. Please try again.");
+
+          // Save timeout error message to database
+          const timeoutMessage = new AIMessage("I'm sorry, the operation took too long and timed out. Please try again.");
+          await saveChatMessage(userId, timeoutMessage);
         } else {
           logger.error("message handler", "Error processing stream:", error);
           await ctx.reply("I'm sorry, an error occurred while processing your request.");
+
+          // Save error message to database
+          const errorMessage = new AIMessage("I'm sorry, an error occurred while processing your request.");
+          await saveChatMessage(userId, errorMessage);
         }
       }
     } catch (error) {
