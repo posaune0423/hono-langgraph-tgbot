@@ -44,3 +44,11 @@ export const isGeneralistMessage = (chunk: StreamChunk) => {
 export const sleep = (ms: number): Promise<void> => {
   return new Promise((resolve) => setTimeout(resolve, ms));
 };
+
+/**
+ * Convert number or undefined to string or null
+ * undefined値をnullに変換するヘルパー関数
+ */
+export const convertToString = (value: number | undefined): string | null => {
+  return value !== undefined ? value.toString() : null;
+};

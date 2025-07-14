@@ -133,9 +133,44 @@ export const createTechnicalAnalysis = async (
     return { success: true, totalUpserted: 0, hasErrors: false };
   }
 
-  const result = await batchUpsert(technicalAnalysis, data, {
+  // データの検証とログ出力
+  logger.info(`Attempting to save ${data.length} technical analysis records`);
+
+  // 最初のレコードをサンプルとしてログ出力
+  if (data.length > 0) {
+    logger.info("Sample technical analysis data:", {
+      sampleRecord: data[0],
+      recordKeys: Object.keys(data[0]),
+    });
+  }
+
+  // データの基本検証
+  const validData = data.filter((record) => {
+    if (!record.id || !record.token || !record.timestamp) {
+      logger.warn("Invalid technical analysis record:", {
+        id: record.id,
+        token: record.token,
+        timestamp: record.timestamp,
+      });
+      return false;
+    }
+    return true;
+  });
+
+  if (validData.length === 0) {
+    logger.error("No valid technical analysis data to save");
+    return { success: false, totalUpserted: 0, hasErrors: true };
+  }
+
+  if (validData.length < data.length) {
+    logger.warn(`Filtered out ${data.length - validData.length} invalid records`);
+  }
+
+  const result = await batchUpsert(technicalAnalysis, validData, {
     conflictTarget: ["id"],
     updateFields: [
+      "token",
+      "timestamp",
       "vwap",
       "vwap_deviation",
       "obv",
@@ -148,6 +183,8 @@ export const createTechnicalAnalysis = async (
       "adx_direction",
       "rsi",
     ],
+    batchSize: 10, // バッチサイズを小さくしてテスト
+    maxConcurrency: 1, // 並行処理を無効にしてテスト
   });
 
   return {
@@ -337,8 +374,22 @@ export const batchUpsert = async <T extends Record<string, any>>(
         logger.error(`Batch ${batchNumber}/${batches.length} failed:`, {
           error: error instanceof Error ? error.message : String(error),
           batchSize: batch.length,
-          firstRecord: batch[0] ? JSON.stringify(batch[0]).substring(0, 200) : "N/A",
+          firstRecord: batch[0] ? JSON.stringify(batch[0]).substring(0, 500) : "N/A",
+          conflictTarget: options.conflictTarget,
+          updateFields: options.updateFields,
+          tableName: table._.name || "unknown",
         });
+
+        // データの詳細をデバッグ出力
+        if (batch.length > 0) {
+          logger.debug("Failed batch sample data:", {
+            sampleRecords: batch.slice(0, 3).map((record, index) => ({
+              index,
+              record: JSON.stringify(record).substring(0, 300),
+              keys: Object.keys(record),
+            })),
+          });
+        }
 
         // エラーが発生してもthrowしない、結果オブジェクトを返す
         return { success: false, count: 0 };

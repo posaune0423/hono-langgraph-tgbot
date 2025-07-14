@@ -1,6 +1,7 @@
 import { RSI, ATR, ADX, BollingerBands, VWAP, OBV } from "technicalindicators";
 import { logger } from "../utils/logger";
 import { generateId } from "../utils/id";
+import { convertToString } from "../utils";
 import type { NewTechnicalAnalysis } from "../db";
 import {
   OBV_ZSCORE_CONFIG,
@@ -293,16 +294,16 @@ export const convertTAtoDbFormat = (
     id: generateId(),
     token,
     timestamp,
-    vwap: analysis.vwap?.toString(),
-    vwap_deviation: analysis.vwapDeviation?.toString(),
-    obv: analysis.obv?.toString(),
-    obv_zscore: analysis.obvZScore?.toString(),
-    percent_b: analysis.percentB?.toString(),
-    bb_width: analysis.bbWidth?.toString(),
-    atr: analysis.atr?.toString(),
-    atr_percent: analysis.atrPercent?.toString(),
-    adx: analysis.adx?.toString(),
-    adx_direction: analysis.adxDirection,
-    rsi: analysis.rsi?.toString(),
+    vwap: convertToString(analysis.vwap),
+    vwap_deviation: convertToString(analysis.vwapDeviation),
+    obv: convertToString(analysis.obv),
+    obv_zscore: convertToString(analysis.obvZScore),
+    percent_b: convertToString(analysis.percentB),
+    bb_width: convertToString(analysis.bbWidth),
+    atr: convertToString(analysis.atr),
+    atr_percent: convertToString(analysis.atrPercent),
+    adx: convertToString(analysis.adx),
+    adx_direction: analysis.adxDirection || null,
+    rsi: convertToString(analysis.rsi),
   };
 };
