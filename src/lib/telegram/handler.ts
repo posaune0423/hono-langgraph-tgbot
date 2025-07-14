@@ -7,7 +7,7 @@ import { SetupStep } from "../../types";
 import { proceedToNextStep } from "./command";
 import { isValidSolanaAddress } from "../../utils/solana";
 import { dumpTokenUsage, isAnalyzerMessage, isGeneralistMessage } from "../../utils";
-import { getUserProfile, updateUserProfile, getChatHistory, saveChatMessage, createTokens } from "../../utils/db";
+import { getUserProfile, updateUserProfile, getChatHistory, saveChatMessage, createTokens, updateUserTokenHoldings } from "../../utils/db";
 import { createTimeoutPromise } from "../../utils";
 import { getAssetsByOwner } from "../helius";
 import type { NewToken } from "../../db";
@@ -66,6 +66,8 @@ export const setupHandler = (bot: Bot) => {
 
             // Insert tokens into database, ignoring duplicates
             await createTokens(userTokens);
+
+            await updateUserTokenHoldings(userId, text, userTokens);
 
             // Proceed to the next step
             await proceedToNextStep(ctx, userId, SetupStep.WALLET_ADDRESS);

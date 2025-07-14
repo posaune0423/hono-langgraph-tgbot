@@ -24,28 +24,8 @@ import {
 import { logger } from "./logger";
 import { HumanMessage, AIMessage, type BaseMessage } from "@langchain/core/messages";
 import { QUERY_LIMITS, BATCH_PROCESSING } from "../constants/database";
-
-/**
- * TypeScriptの型システムを活用した厳密な型チェック
- * コンパイル時に型の不整合を検出する
- */
-
-// 実際のデータベースに存在するフィールドのみを定義した型
-type StrictTokenInsert = {
-  address: string;
-  name: string;
-  symbol: string; // 空文字列不可
-  decimals: number;
-  iconUrl: string;
-};
-
-type StrictUserTokenHoldingInsert = {
-  userId: string;
-  tokenAddress: string;
-  amount: string;
-  lastVerifiedAt: Date;
-  // created_at, updated_atは除外（データベースのDEFAULT値を使用）
-};
+import { DAS } from "helius-sdk";
+import { getAssetsByOwner } from "../lib/helius";
 
 export const getTokens = async (): Promise<Token[]> => {
   const db = getDB();
@@ -55,34 +35,22 @@ export const getTokens = async (): Promise<Token[]> => {
 export const createTokens = async (newTokens: NewToken[]): Promise<Token[]> => {
   const db = getDB();
 
-  // 型安全なバリデーションを実行
-  const validatedTokens: StrictTokenInsert[] = newTokens.map((token, index) => {
-    const address = token?.address || "";
-    const name = token?.name || "";
-    const symbol = token?.symbol?.trim() || `NFT_${address.substring(0, 8)}`;
-    const decimals = token?.decimals ?? 0;
-    const iconUrl = token?.iconUrl || "";
-
-    if (!address || !name || !iconUrl || decimals < 0) {
-      logger.error(`Invalid token data at index ${index}:`, { address, name, symbol, decimals, iconUrl });
-      throw new Error(`Invalid token data at index ${index}`);
-    }
-
-    return { address, name, symbol, decimals, iconUrl };
-  });
+  const validatedTokens = newTokens
+    .map((token) => ({
+      address: token.address || "",
+      name: token.name || "",
+      symbol: token.symbol?.trim() || `NFT_${token.address?.substring(0, 8)}`,
+      decimals: token.decimals ?? 0,
+      iconUrl: token.iconUrl || "",
+    }))
+    .filter((token) => token.address && token.name);
 
   // 重複するsymbolを除去
   const uniqueTokens = validatedTokens.filter(
     (token, index, array) => array.findIndex((t) => t.symbol === token.symbol) === index,
   );
 
-  return await db
-    .insert(tokens)
-    .values(uniqueTokens)
-    .onConflictDoNothing({
-      target: tokens.address,
-    })
-    .returning();
+  return await db.insert(tokens).values(uniqueTokens).onConflictDoNothing({ target: tokens.address }).returning();
 };
 
 export const getUsers = async (): Promise<User[]> => {
@@ -107,26 +75,23 @@ export const getUserProfile = async (userId: string): Promise<User | null> => {
 
 export const updateUserProfile = async (userId: string, profile: Partial<NewUser>): Promise<User | null> => {
   const db = getDB();
-
-  // 現在のユーザープロファイルを取得
   const currentUser = await getUserProfile(userId);
 
   const [user] = await db.update(users).set(profile).where(eq(users.userId, userId)).returning();
 
   // walletAddressが変更された場合、token holdingsを更新
-  if (user && profile.walletAddress && profile.walletAddress !== currentUser?.walletAddress) {
+  if (user?.walletAddress && user.walletAddress !== currentUser?.walletAddress) {
     try {
-      await updateUserTokenHoldings(user.userId, profile.walletAddress);
+      await updateUserTokenHoldings(user.userId, user.walletAddress);
       logger.info(`Updated token holdings for user ${userId} after wallet address change`, {
         oldWalletAddress: currentUser?.walletAddress,
-        newWalletAddress: profile.walletAddress,
+        newWalletAddress: user.walletAddress,
       });
     } catch (error) {
       logger.error(`Failed to update token holdings for user ${userId} after wallet address change`, {
-        walletAddress: profile.walletAddress,
+        walletAddress: user.walletAddress,
         error: error instanceof Error ? error.message : String(error),
       });
-      // token holdingsの更新に失敗してもユーザープロファイルの更新は成功させる
     }
   }
 
@@ -498,61 +463,55 @@ export const getRecentSignals = async (sinceTimestamp?: Date, limit: number = 10
  * ユーザーのトークン保有状況を更新する
  * @param userId ユーザーID
  * @param walletAddress ウォレットアドレス
+ * @param tokens ユーザーが保有しているトークンのリスト（省略時はHeliusAPIから取得）
  */
-export const updateUserTokenHoldings = async (userId: string, walletAddress: string): Promise<void> => {
-  const { getAssetsByOwner } = await import("../lib/helius");
-
+export const updateUserTokenHoldings = async (
+  userId: string,
+  walletAddress: string,
+  tokens?: Token[],
+): Promise<void> => {
   try {
-    // Helius APIからユーザーの保有アセットを取得
-    const assets = await getAssetsByOwner(walletAddress);
+    const db = getDB();
 
-    // FT（Fungible Token）のみを抽出してアドレスを取得
-    const isFungibleToken = (asset: any) => {
-      const interfaceStr = String(asset.interface);
-      return interfaceStr === "Fungible" || interfaceStr === "FungibleAsset" || (asset.token_info?.decimals ?? 0) > 0;
-    };
+    // tokensが提供されていない場合は、HeliusAPIから取得
+    let userTokens = tokens;
+    if (!userTokens) {
+      const assets = await getAssetsByOwner(walletAddress);
 
-    const currentTokenAddresses = assets.filter(isFungibleToken).map((asset) => asset.id);
-
-    logger.info(`Filtered ${currentTokenAddresses.length} fungible tokens from ${assets.length} total assets`, {
-      userId,
-      walletAddress,
-      fungibleTokenCount: currentTokenAddresses.length,
-    });
+      // Fungible tokenのみを抽出してToken形式に変換
+      userTokens = assets
+        .filter((asset) => {
+          const interfaceStr = String(asset.interface);
+          return (
+            interfaceStr === "Fungible" || interfaceStr === "FungibleAsset" || (asset.token_info?.decimals ?? 0) > 0
+          );
+        })
+        .map((asset) => ({
+          address: asset.id,
+          symbol: asset.content?.metadata?.symbol || asset.token_info?.symbol || `NFT_${asset.id.substring(0, 8)}`,
+          name: asset.content?.metadata?.name || "",
+          decimals: asset.token_info?.decimals || 9,
+          iconUrl: asset.content?.files?.[0]?.uri || "",
+        }));
+    }
 
     // 既存の保有記録を削除
-    const db = getDB();
     await db.delete(userTokenHoldings).where(eq(userTokenHoldings.userId, userId));
 
     // 新しい保有記録を挿入
-    if (currentTokenAddresses.length > 0) {
-      const rawHoldings = currentTokenAddresses.map((tokenAddress) => ({
+    if (userTokens.length > 0) {
+      const holdings = userTokens.map((token) => ({
         userId,
-        tokenAddress,
+        tokenAddress: token.address,
         amount: "0", // 実際の保有量は必要に応じて後で実装
         lastVerifiedAt: new Date(),
       }));
 
-      // 型安全なバリデーションを実行
-      const validatedHoldings: StrictUserTokenHoldingInsert[] = rawHoldings.map((holding, index) => {
-        const userId = holding?.userId || "";
-        const tokenAddress = holding?.tokenAddress || "";
-        const amount = holding?.amount || "0";
-        const lastVerifiedAt = holding?.lastVerifiedAt instanceof Date ? holding.lastVerifiedAt : new Date();
-
-        if (!userId || !tokenAddress) {
-          logger.error(`Invalid holding data at index ${index}:`, { userId, tokenAddress, amount });
-          throw new Error(`Invalid holding data at index ${index}`);
-        }
-
-        return { userId, tokenAddress, amount, lastVerifiedAt };
-      });
-
-      await db.insert(userTokenHoldings).values(validatedHoldings).onConflictDoNothing();
+      await db.insert(userTokenHoldings).values(holdings).onConflictDoNothing();
     }
 
     logger.info(`Updated token holdings for user ${userId}`, {
-      tokenCount: currentTokenAddresses.length,
+      tokenCount: userTokens.length,
       walletAddress,
     });
   } catch (error) {
