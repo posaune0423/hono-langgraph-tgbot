@@ -1,1 +1,0 @@
-ALTER TABLE "technical_analysis" ADD COLUMN "signal_generated" boolean DEFAULT false NOT NULL;

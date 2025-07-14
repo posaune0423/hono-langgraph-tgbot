@@ -5,29 +5,8 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1749728179362,
-      "tag": "0000_cheerful_patch",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "7",
-      "when": 1752514279238,
-      "tag": "0001_powerful_blazing_skull",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1752514604336,
-      "tag": "0002_add_user_token_holdings_with_optimized_schema",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "7",
-      "when": 1752515649368,
-      "tag": "0003_demonic_dormammu",
+      "when": 1752518040064,
+      "tag": "0000_smiling_sandman",
       "breakpoints": true
     }
   ]
