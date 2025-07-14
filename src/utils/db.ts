@@ -161,11 +161,7 @@ export const updateUserWalletAddress = async (userId: string, walletAddress: str
   }
 
   // walletAddressを更新
-  const [user] = await db
-    .update(users)
-    .set({ walletAddress })
-    .where(eq(users.userId, userId))
-    .returning();
+  const [user] = await db.update(users).set({ walletAddress }).where(eq(users.userId, userId)).returning();
 
   if (!user) {
     logger.error(`Failed to update wallet address for user ${userId}`);
