@@ -19,12 +19,11 @@ import {
   Signal,
   userTokenHoldings,
   type UserTokenHolding,
-  NewUserTokenHolding,
 } from "../db";
 import { logger } from "./logger";
 import { HumanMessage, AIMessage, type BaseMessage } from "@langchain/core/messages";
 import { QUERY_LIMITS, BATCH_PROCESSING } from "../constants/database";
-import { DAS } from "helius-sdk";
+
 import { getAssetsByOwner } from "../lib/helius";
 
 export const getTokens = async (): Promise<Token[]> => {
@@ -479,7 +478,7 @@ export const updateUserTokenHoldings = async (
       const assets = await getAssetsByOwner(walletAddress);
 
       // Fungible tokenのみを抽出してToken形式に変換
-      userTokens = assets
+      const tokenData = assets
         .filter((asset) => {
           const interfaceStr = String(asset.interface);
           return (
@@ -493,22 +492,24 @@ export const updateUserTokenHoldings = async (
           decimals: asset.token_info?.decimals || 9,
           iconUrl: asset.content?.files?.[0]?.uri || "",
         }));
+
+      // tokensテーブルにトークンを作成（外部キー制約のため）
+      userTokens = await createTokens(tokenData);
     }
 
     // 既存の保有記録を削除
     await db.delete(userTokenHoldings).where(eq(userTokenHoldings.userId, userId));
 
-    // 新しい保有記録を挿入
-    if (userTokens.length > 0) {
-      const holdings = userTokens.map((token) => ({
-        userId,
-        tokenAddress: token.address,
-        amount: "0", // 実際の保有量は必要に応じて後で実装
-        lastVerifiedAt: new Date(),
-      }));
+    // 新しい保有記録を挿入（amountカラムを削除）
+    if (userTokens.length === 0) return;
 
-      await db.insert(userTokenHoldings).values(holdings).onConflictDoNothing();
-    }
+    const holdings = userTokens.map((token) => ({
+      userId,
+      tokenAddress: token.address,
+      lastVerifiedAt: new Date(),
+    }));
+
+    await db.insert(userTokenHoldings).values(holdings).onConflictDoNothing();
 
     logger.info(`Updated token holdings for user ${userId}`, {
       tokenCount: userTokens.length,

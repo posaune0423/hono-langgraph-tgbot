@@ -19,9 +19,6 @@ export const userTokenHoldings = pgTable(
       .notNull()
       .references(() => tokens.address, { onDelete: "cascade" }),
 
-    // 保有量（大きな数値を扱うためstring形式）
-    amount: decimal("amount", { precision: 36, scale: 18 }).default("0"),
-
     // 最後に検証された時刻
     lastVerifiedAt: timestamp("last_verified_at", { withTimezone: true }).defaultNow().notNull(),
 
