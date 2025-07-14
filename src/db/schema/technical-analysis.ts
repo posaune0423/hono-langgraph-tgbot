@@ -1,4 +1,4 @@
-import { pgTable, text, integer, numeric, timestamp, unique } from "drizzle-orm/pg-core";
+import { pgTable, text, integer, numeric, timestamp, unique, boolean } from "drizzle-orm/pg-core";
 import { tokens } from "./tokens";
 
 export const technicalAnalysis = pgTable("technical_analysis", {
@@ -19,6 +19,9 @@ export const technicalAnalysis = pgTable("technical_analysis", {
   adx: numeric("adx"),
   adx_direction: text("adx_direction"),
   rsi: numeric("rsi"),
+
+  // シグナル生成済みフラグ
+  signalGenerated: boolean("signal_generated").default(false).notNull(),
 
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });

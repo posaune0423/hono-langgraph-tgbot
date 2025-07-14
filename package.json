@@ -47,5 +47,5 @@
     "trailingComma": "all",
     "printWidth": 120
   },
-  "packageManager": "bun@1.2.15"
+  "packageManager": "bun@1.2.18"
 }

@@ -6,12 +6,20 @@ import {
   createTechnicalAnalysis,
   cleanupAllTokensOHLCVByCount,
   createSignal,
+  getRecentSignals,
+  getUsersHoldingToken,
+  getTokenSymbol,
+  getLatestTokenPrice,
+  syncAllUserTokenHoldings,
+  getUnprocessedTechnicalAnalyses,
+  markTechnicalAnalysisAsProcessed,
 } from "./utils/db";
 import { fetchMultipleTokenOHLCV } from "./lib/vybe";
 import { getTACache } from "./lib/ta-cache";
-import { tokenOHLCV } from "./db";
+import { tokenOHLCV, type User } from "./db";
 import { calculateTechnicalIndicators, convertTAtoDbFormat, type OHLCVData } from "./lib/ta";
 import { OHLCV_RETENTION } from "./constants/database";
+import { getBotInstance } from "./lib/telegram/bot";
 
 // every 5 minutes
 export const runCronTasks = async () => {
@@ -26,8 +34,16 @@ export const runCronTasks = async () => {
   // 3. シグナルを生成
   await generateSignalTask();
 
+  // 4. シグナルをTelegramに送信
+  await sendSignalToTelegram();
+
   // 1時間おきにクリーンアップを実行（5分間隔のcronが12回実行されるごと）
-  if (new Date().getMinutes() === 0) await cleanupOHLCVTask();
+  if (new Date().getMinutes() === 0) {
+    await cleanupOHLCVTask();
+
+    // 1時間おきにユーザーのトークン保有状況を同期
+    await syncUserTokenHoldingsTask();
+  }
 
   logger.info(`cron end: ${new Date().toISOString()}`);
 };
@@ -164,10 +180,11 @@ const technicalAnalysisTask = async () => {
 /**
  * 個別トークンのシグナル生成処理
  */
-const processTokenSignal = async (analysis: any, db: any) => {
+const processTokenSignal = async (analysis: any) => {
   // トークン情報を取得
-  const { tokens, tokenOHLCV, signal } = await import("./db");
+  const { tokens, tokenOHLCV, signal, getDB } = await import("./db");
   const { eq, desc } = await import("drizzle-orm");
+  const db = getDB();
 
   const tokenInfo = await db.select().from(tokens).where(eq(tokens.address, analysis.token)).limit(1);
 
@@ -238,6 +255,9 @@ const processTokenSignal = async (analysis: any, db: any) => {
     priority: result.finalSignal.priority,
   });
 
+  // 処理済みフラグを設定
+  await markTechnicalAnalysisAsProcessed(analysis.id);
+
   return {
     signalId: createdSignal.id,
     token: token.symbol,
@@ -249,26 +269,20 @@ const generateSignalTask = async () => {
   logger.info("Starting signal generation task");
 
   try {
-    // 最新のテクニカル分析データを取得
-    const { technicalAnalysis, getDB } = await import("./db");
-    const { desc } = await import("drizzle-orm");
-    const db = getDB();
+    // 処理済みでない技術分析データを取得
+    const unprocessedAnalyses = await getUnprocessedTechnicalAnalyses(10);
 
-    const latestAnalyses = await db
-      .select()
-      .from(technicalAnalysis)
-      .orderBy(desc(technicalAnalysis.timestamp))
-      .limit(10); // 最新10件のトークンを対象
-
-    if (latestAnalyses.length === 0) {
-      logger.info("No technical analysis data found for signal generation");
+    if (unprocessedAnalyses.length === 0) {
+      logger.info("No unprocessed technical analysis data found for signal generation");
       return;
     }
 
+    logger.info(`Found ${unprocessedAnalyses.length} unprocessed technical analyses`);
+
     // 各トークンに対してシグナル生成を並列実行
-    const signalPromises = latestAnalyses.map(async (analysis) => {
+    const signalPromises = unprocessedAnalyses.map(async (analysis) => {
       try {
-        return await processTokenSignal(analysis, db);
+        return await processTokenSignal(analysis);
       } catch (error) {
         logger.error("Signal generation failed for token", {
           tokenAddress: analysis.token,
@@ -283,7 +297,7 @@ const generateSignalTask = async () => {
     const generatedSignals = results.filter((result) => result !== null);
 
     logger.info("Signal generation task completed", {
-      totalAnalyzed: latestAnalyses.length,
+      totalAnalyzed: unprocessedAnalyses.length,
       signalsGenerated: generatedSignals.length,
       signals: generatedSignals.map((s) => ({ id: s?.signalId, token: s?.token })),
     });
@@ -291,6 +305,57 @@ const generateSignalTask = async () => {
     logger.error("Signal generation task failed", {
       error: error instanceof Error ? error.message : String(error),
     });
+  }
+};
+
+const sendSignalToTelegram = async () => {
+  logger.info("Starting signal-to-telegram task");
+
+  try {
+    const recentSignals = await getRecentSignals();
+
+    if (recentSignals.length === 0) {
+      logger.info("No recent signals found");
+      return;
+    }
+
+    logger.info(`Processing ${recentSignals.length} recent signals`);
+
+    for (const signalData of recentSignals) {
+      try {
+        const holdingUsers = await getUsersHoldingToken(signalData.token);
+
+        if (holdingUsers.length === 0) {
+          logger.info(`No users holding token, skipping signal ${signalData.id}`);
+          continue;
+        }
+
+        const bot = getBotInstance();
+        const message = signalData.body; // 既にformatされたメッセージをそのまま使用
+
+        // 並列でメッセージを送信
+        const sendPromises = holdingUsers.map(async (user: User) => {
+          try {
+            await bot.api.sendMessage(user.userId, message, {
+              parse_mode: "Markdown",
+            });
+            return { success: true, userId: user.userId };
+          } catch (error) {
+            logger.error(`Failed to send to user ${user.userId}:`, error);
+            return { success: false, userId: user.userId };
+          }
+        });
+
+        const results = await Promise.allSettled(sendPromises);
+        const successCount = results.filter((result) => result.status === "fulfilled" && result.value.success).length;
+
+        logger.info(`Signal ${signalData.id} sent to ${successCount}/${holdingUsers.length} users`);
+      } catch (error) {
+        logger.error(`Error processing signal ${signalData.id}:`, error);
+      }
+    }
+  } catch (error) {
+    logger.error("Signal-to-telegram task failed:", error);
   }
 };
 
@@ -310,5 +375,22 @@ const cleanupOHLCVTask = async () => {
     );
   } catch (error) {
     logger.error("Failed to cleanup OHLCV data", error);
+  }
+};
+
+/**
+ * ユーザーのトークン保有状況を同期するタスク
+ * 全ユーザーのトークン保有状況をHelius APIから取得して更新する
+ */
+const syncUserTokenHoldingsTask = async () => {
+  logger.info("Starting user token holdings synchronization");
+
+  try {
+    await syncAllUserTokenHoldings(5); // バッチサイズを5に設定（API制限を考慮）
+    logger.info("Successfully completed user token holdings synchronization");
+  } catch (error) {
+    logger.error("Failed to sync user token holdings", {
+      error: error instanceof Error ? error.message : String(error),
+    });
   }
 };

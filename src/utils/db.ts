@@ -17,6 +17,9 @@ import {
   signal,
   NewSignal,
   Signal,
+  userTokenHoldings,
+  type UserTokenHolding,
+  NewUserTokenHolding,
 } from "../db";
 import { logger } from "./logger";
 import { HumanMessage, AIMessage, type BaseMessage } from "@langchain/core/messages";
@@ -60,7 +63,29 @@ export const getUserProfile = async (userId: string): Promise<User | null> => {
 
 export const updateUserProfile = async (userId: string, profile: Partial<NewUser>): Promise<User | null> => {
   const db = getDB();
+
+  // 現在のユーザープロファイルを取得
+  const currentUser = await getUserProfile(userId);
+
   const [user] = await db.update(users).set(profile).where(eq(users.userId, userId)).returning();
+
+  // walletAddressが変更された場合、token holdingsを更新
+  if (user && profile.walletAddress && profile.walletAddress !== currentUser?.walletAddress) {
+    try {
+      await updateUserTokenHoldings(user.userId, profile.walletAddress);
+      logger.info(`Updated token holdings for user ${userId} after wallet address change`, {
+        oldWalletAddress: currentUser?.walletAddress,
+        newWalletAddress: profile.walletAddress,
+      });
+    } catch (error) {
+      logger.error(`Failed to update token holdings for user ${userId} after wallet address change`, {
+        walletAddress: profile.walletAddress,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      // token holdingsの更新に失敗してもユーザープロファイルの更新は成功させる
+    }
+  }
+
   return user;
 };
 
@@ -72,6 +97,10 @@ export const createUserProfile = async (profile: NewUser): Promise<User> => {
 
 export const upsertUserProfile = async (profile: NewUser): Promise<User> => {
   const db = getDB();
+
+  // 既存のユーザープロファイルを取得
+  const existingUser = await getUserProfile(profile.userId);
+
   const [user] = await db
     .insert(users)
     .values(profile)
@@ -80,12 +109,84 @@ export const upsertUserProfile = async (profile: NewUser): Promise<User> => {
       set: profile,
     })
     .returning();
+
+  // walletAddressが設定されており、かつ変更があった場合のみtoken holdingsを更新
+  if (user.walletAddress && user.walletAddress !== existingUser?.walletAddress) {
+    try {
+      await updateUserTokenHoldings(user.userId, user.walletAddress);
+      logger.info(`Updated token holdings for user ${user.userId} after profile upsert`, {
+        oldWalletAddress: existingUser?.walletAddress,
+        newWalletAddress: user.walletAddress,
+        tokenHoldingsUpdated: true,
+      });
+    } catch (error) {
+      logger.error(`Failed to update token holdings for user ${user.userId} after profile upsert`, {
+        walletAddress: user.walletAddress,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      // token holdingsの更新に失敗してもユーザープロファイルの更新は成功させる
+    }
+  }
+
   return user;
 };
 
 export const getUserProfileByWalletAddress = async (walletAddress: string): Promise<User | null> => {
   const db = getDB();
   const [user] = await db.select().from(users).where(eq(users.walletAddress, walletAddress));
+  return user;
+};
+
+/**
+ * ユーザーのwalletAddressを更新し、token holdingsを同期する
+ * @param userId ユーザーID
+ * @param walletAddress 新しいwalletAddress
+ * @returns 更新されたユーザーオブジェクト
+ */
+export const updateUserWalletAddress = async (userId: string, walletAddress: string): Promise<User | null> => {
+  const db = getDB();
+
+  // 現在のユーザープロファイルを取得
+  const currentUser = await getUserProfile(userId);
+
+  if (!currentUser) {
+    logger.warn(`User not found for wallet address update: ${userId}`);
+    return null;
+  }
+
+  // walletAddressが変更されない場合は何もしない
+  if (currentUser.walletAddress === walletAddress) {
+    logger.info(`Wallet address unchanged for user ${userId}, skipping update`);
+    return currentUser;
+  }
+
+  // walletAddressを更新
+  const [user] = await db
+    .update(users)
+    .set({ walletAddress })
+    .where(eq(users.userId, userId))
+    .returning();
+
+  if (!user) {
+    logger.error(`Failed to update wallet address for user ${userId}`);
+    return null;
+  }
+
+  // token holdingsを更新
+  try {
+    await updateUserTokenHoldings(user.userId, walletAddress);
+    logger.info(`Successfully updated wallet address and token holdings for user ${userId}`, {
+      oldWalletAddress: currentUser.walletAddress,
+      newWalletAddress: walletAddress,
+    });
+  } catch (error) {
+    logger.error(`Failed to update token holdings after wallet address change for user ${userId}`, {
+      walletAddress,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    // token holdingsの更新に失敗してもwalletAddressの更新は成功させる
+  }
+
   return user;
 };
 
@@ -182,6 +283,7 @@ export const createTechnicalAnalysis = async (
       "adx",
       "adx_direction",
       "rsi",
+      "signalGenerated",
     ],
     batchSize: 10, // バッチサイズを小さくしてテスト
     maxConcurrency: 1, // 並行処理を無効にしてテスト
@@ -192,6 +294,31 @@ export const createTechnicalAnalysis = async (
     totalUpserted: result.totalUpserted,
     hasErrors: result.hasErrors,
   };
+};
+
+/**
+ * 処理済みでない技術分析データを取得する
+ */
+export const getUnprocessedTechnicalAnalyses = async (limit: number = 10): Promise<TechnicalAnalysis[]> => {
+  const db = getDB();
+  const unprocessedAnalyses = await db
+    .select()
+    .from(technicalAnalysis)
+    .where(eq(technicalAnalysis.signalGenerated, false))
+    .orderBy(desc(technicalAnalysis.timestamp))
+    .limit(limit);
+
+  return unprocessedAnalyses;
+};
+
+/**
+ * 技術分析データを処理済みにマークする
+ */
+export const markTechnicalAnalysisAsProcessed = async (analysisId: string): Promise<void> => {
+  const db = getDB();
+  await db.update(technicalAnalysis).set({ signalGenerated: true }).where(eq(technicalAnalysis.id, analysisId));
+
+  logger.info("Technical analysis marked as processed", { analysisId });
 };
 
 export const createSignal = async (signalData: NewSignal): Promise<Signal> => {
@@ -281,10 +408,20 @@ export const saveChatMessage = async (userId: string, message: BaseMessage): Pro
     userId,
     content: message.content as string,
     messageType,
+    timestamp: new Date(), // 明示的にtimestampを指定
   };
 
-  await db.insert(chatMessages).values(newMessage);
-  logger.info(`Saved ${messageType} message for user ${userId}`);
+  try {
+    await db.insert(chatMessages).values(newMessage);
+    logger.info(`Saved ${messageType} message for user ${userId}`);
+  } catch (error) {
+    logger.error(`Failed to save ${messageType} message for user ${userId}`, {
+      error: error instanceof Error ? error.message : String(error),
+      messageId,
+      contentLength: (message.content as string).length,
+    });
+    throw error;
+  }
 };
 
 /**
@@ -294,6 +431,134 @@ export const clearChatHistory = async (userId: string): Promise<void> => {
   const db = getDB();
   await db.delete(chatMessages).where(eq(chatMessages.userId, userId));
   logger.info(`Cleared chat history for user ${userId}`);
+};
+
+/**
+ * 最新のシグナルを取得する（指定した時間以降）
+ * @param sinceTimestamp 指定した時間以降のシグナルを取得（デフォルト：15分前）
+ * @param limit 最大取得件数（デフォルト：10）
+ */
+export const getRecentSignals = async (sinceTimestamp?: Date, limit: number = 10): Promise<Signal[]> => {
+  const db = getDB();
+
+  // デフォルトは15分前のシグナルを取得
+  const defaultSinceTimestamp = sinceTimestamp || new Date(Date.now() - 15 * 60 * 1000);
+
+  const recentSignals = await db
+    .select()
+    .from(signal)
+    .where(sql`${signal.timestamp} >= ${defaultSinceTimestamp}`)
+    .orderBy(desc(signal.timestamp))
+    .limit(limit);
+
+  return recentSignals;
+};
+
+/**
+ * ユーザーのトークン保有状況を更新する
+ * @param userId ユーザーID
+ * @param walletAddress ウォレットアドレス
+ */
+export const updateUserTokenHoldings = async (userId: string, walletAddress: string): Promise<void> => {
+  const { getAssetsByOwner } = await import("../lib/helius");
+
+  try {
+    // Helius APIからユーザーの保有アセットを取得
+    const assets = await getAssetsByOwner(walletAddress);
+
+    // 現在の保有トークンのアドレスを取得
+    const currentTokenAddresses = assets.map((asset) => asset.id);
+
+    // 既存の保有記録を削除
+    const db = getDB();
+    await db.delete(userTokenHoldings).where(eq(userTokenHoldings.userId, userId));
+
+    // 新しい保有記録を挿入
+    if (currentTokenAddresses.length > 0) {
+      const newHoldings: NewUserTokenHolding[] = currentTokenAddresses.map((tokenAddress) => ({
+        userId,
+        tokenAddress,
+        amount: "0", // 実際の保有量は必要に応じて後で実装
+        lastVerifiedAt: new Date(),
+      }));
+
+      await db.insert(userTokenHoldings).values(newHoldings).onConflictDoNothing();
+    }
+
+    logger.info(`Updated token holdings for user ${userId}`, {
+      tokenCount: currentTokenAddresses.length,
+      walletAddress,
+    });
+  } catch (error) {
+    logger.error(`Failed to update token holdings for user ${userId}`, {
+      walletAddress,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    throw error;
+  }
+};
+
+/**
+ * 指定したトークンを保有するユーザーを取得する（データベースから）
+ * @param tokenAddress トークンアドレス
+ */
+export const getUsersHoldingToken = async (tokenAddress: string): Promise<User[]> => {
+  const db = getDB();
+
+  const usersWithHoldings = await db
+    .select({
+      userId: users.userId,
+      walletAddress: users.walletAddress,
+      firstName: users.firstName,
+      lastName: users.lastName,
+      username: users.username,
+      age: users.age,
+      cryptoRiskTolerance: users.cryptoRiskTolerance,
+      totalAssets: users.totalAssets,
+      cryptoAssets: users.cryptoAssets,
+      panicLevel: users.panicLevel,
+      heartRate: users.heartRate,
+      interests: users.interests,
+      currentSetupStep: users.currentSetupStep,
+      setupCompleted: users.setupCompleted,
+      waitingForInput: users.waitingForInput,
+      lastUpdated: users.lastUpdated,
+      createdAt: users.createdAt,
+    })
+    .from(users)
+    .innerJoin(userTokenHoldings, eq(users.userId, userTokenHoldings.userId))
+    .where(eq(userTokenHoldings.tokenAddress, tokenAddress));
+
+  return usersWithHoldings;
+};
+
+/**
+ * 指定したトークンのシンボルを取得する
+ */
+export const getTokenSymbol = async (tokenAddress: string): Promise<string> => {
+  const db = getDB();
+  const tokenInfo = await db
+    .select({ symbol: tokens.symbol })
+    .from(tokens)
+    .where(eq(tokens.address, tokenAddress))
+    .limit(1);
+
+  return tokenInfo[0]?.symbol || tokenAddress;
+};
+
+/**
+ * 指定したトークンの最新価格を取得する
+ */
+export const getLatestTokenPrice = async (tokenAddress: string): Promise<number | undefined> => {
+  const db = getDB();
+  const latestOHLCV = await db
+    .select({ close: tokenOHLCV.close })
+    .from(tokenOHLCV)
+    .where(eq(tokenOHLCV.token, tokenAddress))
+    .orderBy(desc(tokenOHLCV.timestamp))
+    .limit(1);
+
+  return latestOHLCV[0] ? parseFloat(latestOHLCV[0].close) : undefined;
 };
 
 // Drizzleテーブルからカラム名を抽出する型（keyofを使用してシンプルに）
@@ -530,4 +795,52 @@ export const cleanupAllTokensOHLCVByCount = async (keepCount: number = 1000): Pr
   await Promise.all(cleanupPromises);
 
   logger.info(`Completed cleanup for all tokens`);
+};
+
+/**
+ * 全ユーザーのトークン保有状況を同期する
+ * @param batchSize 一度に処理するユーザー数（デフォルト：10）
+ */
+export const syncAllUserTokenHoldings = async (batchSize: number = 10): Promise<void> => {
+  const allUsers = await getUsers();
+  const usersWithWallets = allUsers.filter((user) => user.walletAddress);
+
+  logger.info(`Starting token holdings sync for ${usersWithWallets.length} users`);
+
+  // バッチ処理で実行
+  for (let i = 0; i < usersWithWallets.length; i += batchSize) {
+    const batch = usersWithWallets.slice(i, i + batchSize);
+
+    const batchPromises = batch.map(async (user) => {
+      try {
+        await updateUserTokenHoldings(user.userId, user.walletAddress!);
+        logger.info(`Synced holdings for user ${user.userId}`);
+      } catch (error) {
+        logger.error(`Failed to sync holdings for user ${user.userId}`, {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    });
+
+    await Promise.all(batchPromises);
+
+    // API rate limitingを考慮して、バッチ間で少し待機
+    if (i + batchSize < usersWithWallets.length) {
+      await new Promise((resolve) => setTimeout(resolve, 1000)); // 1秒待機
+    }
+  }
+
+  logger.info(`Completed token holdings sync for all users`);
+};
+
+/**
+ * 指定したユーザーのトークン保有状況を取得する
+ * @param userId ユーザーID
+ */
+export const getUserTokenHoldings = async (userId: string): Promise<UserTokenHolding[]> => {
+  const db = getDB();
+
+  const holdings = await db.select().from(userTokenHoldings).where(eq(userTokenHoldings.userId, userId));
+
+  return holdings;
 };

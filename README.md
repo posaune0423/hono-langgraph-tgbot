@@ -59,6 +59,10 @@ bun run db:push
 3. Set the webhook URL (after deployment):
 
 ```bash
+# Using Telegram Bot API directly
+curl "https://api.telegram.org/bot<token>/setWebhook?url=https://<domain>/webhook/telegram"
+
+# Or using the internal webhook endpoint
 curl -X POST https://your-domain.com/webhook/set \
   -H "Content-Type: application/json" \
   -d '{"url": "https://your-domain.com/webhook/telegram"}'
