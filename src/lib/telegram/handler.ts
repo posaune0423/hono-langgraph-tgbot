@@ -8,9 +8,9 @@ import { proceedToNextStep } from "./command";
 import { isValidSolanaAddress } from "../../utils/solana";
 import { dumpTokenUsage, isAnalyzerMessage, isGeneralistMessage } from "../../utils";
 import { getUserProfile, updateUserProfile, getChatHistory, saveChatMessage, createTokens } from "../../utils/db";
-import { timeoutPromise } from "../../utils";
+import { createTimeoutPromise } from "../../utils";
 import { getAssetsByOwner } from "../helius";
-import { NewToken, tokens } from "../../db";
+import type { NewToken } from "../../db";
 
 export const setupHandler = (bot: Bot) => {
   bot.on("message:text", async (ctx: Context) => {
@@ -178,7 +178,10 @@ export const setupHandler = (bot: Bot) => {
 
       // process response from stream
       try {
-        for await (const chunk of (await Promise.race([stream, timeoutPromise])) as AsyncIterable<StreamChunk>) {
+        for await (const chunk of (await Promise.race([
+          stream,
+          createTimeoutPromise(),
+        ])) as AsyncIterable<StreamChunk>) {
           // Get analyzer or generalist message from chunk
           if (isAnalyzerMessage(chunk)) {
             const lastIndex = chunk.analyzer.messages.length - 1;

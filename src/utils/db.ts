@@ -196,8 +196,50 @@ export const createTechnicalAnalysis = async (
 
 export const createSignal = async (signalData: NewSignal): Promise<Signal> => {
   const db = getDB();
-  const [createdSignal] = await db.insert(signal).values(signalData).returning();
-  return createdSignal;
+
+  // データの検証とログ出力
+  logger.info("Attempting to create signal", {
+    id: signalData.id,
+    token: signalData.token,
+    signalType: signalData.signalType,
+    titleLength: signalData.title?.length || 0,
+    bodyLength: signalData.body?.length || 0,
+    direction: signalData.direction,
+    confidence: signalData.confidence,
+    timestamp: signalData.timestamp,
+  });
+
+  // bodyフィールドの長さを制限（PostgreSQLの制限を考慮）
+  const sanitizedData = {
+    ...signalData,
+    title: signalData.title?.substring(0, 500) || "", // 500文字に制限
+    body: signalData.body?.substring(0, 4000) || "", // 4000文字に制限
+    explanation: signalData.explanation?.substring(0, 2000) || "", // 2000文字に制限
+    confidence: signalData.confidence ? signalData.confidence.toString() : null, // stringのままにする
+  };
+
+  try {
+    const [createdSignal] = await db.insert(signal).values(sanitizedData).returning();
+
+    logger.info("Signal created successfully", {
+      signalId: createdSignal.id,
+      tokenAddress: createdSignal.token,
+    });
+
+    return createdSignal;
+  } catch (error) {
+    logger.error("Failed to create signal", {
+      error: error instanceof Error ? error.message : String(error),
+      signalData: {
+        id: signalData.id,
+        token: signalData.token,
+        signalType: signalData.signalType,
+        titleLength: signalData.title?.length || 0,
+        bodyLength: signalData.body?.length || 0,
+      },
+    });
+    throw error;
+  }
 };
 
 /**
@@ -354,19 +396,19 @@ export const batchUpsert = async <T extends Record<string, any>>(
 
         const updateObject = options.updateFields.reduce(
           (acc, field) => {
-            acc[field] = sql.raw(`excluded.${field}`);
+            acc[field] = sql.raw(`excluded.${String(field)}`);
             return acc;
           },
           {} as Record<string, any>,
         );
 
-        await db
-          .insert(table)
-          .values(batch)
-          .onConflictDoUpdate({
-            target: options.conflictTarget as any,
-            set: updateObject,
-          });
+        // Convert conflictTarget field names to actual column objects
+        const conflictColumns = options.conflictTarget.map((field) => (table as any)[field]);
+
+        await db.insert(table).values(batch).onConflictDoUpdate({
+          target: conflictColumns,
+          set: updateObject,
+        });
 
         logger.info(`Batch ${batchNumber}/${batches.length} completed: ${batch.length} records`);
         return { success: true, count: batch.length };
@@ -377,7 +419,7 @@ export const batchUpsert = async <T extends Record<string, any>>(
           firstRecord: batch[0] ? JSON.stringify(batch[0]).substring(0, 500) : "N/A",
           conflictTarget: options.conflictTarget,
           updateFields: options.updateFields,
-          tableName: table._.name || "unknown",
+          tableName: (table as any)._.name || "unknown",
         });
 
         // データの詳細をデバッグ出力

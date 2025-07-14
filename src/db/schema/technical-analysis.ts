@@ -1,4 +1,4 @@
-import { pgTable, text, integer, numeric, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, integer, numeric, timestamp, unique } from "drizzle-orm/pg-core";
 import { tokens } from "./tokens";
 
 export const technicalAnalysis = pgTable("technical_analysis", {
