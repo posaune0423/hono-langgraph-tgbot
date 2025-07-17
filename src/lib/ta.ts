@@ -1,16 +1,16 @@
-import { RSI, ATR, ADX, BollingerBands, VWAP, OBV } from "technicalindicators";
-import { logger } from "../utils/logger";
-import { generateId } from "../utils/id";
-import { convertToString } from "../utils";
-import type { NewTechnicalAnalysis } from "../db";
+import { ADX, ATR, BollingerBands, OBV, RSI, VWAP } from "technicalindicators";
 import {
+  ADX_CONFIG,
+  ATR_PERCENT_CONFIG,
   OBV_ZSCORE_CONFIG,
   PERCENT_B_CONFIG,
-  ATR_PERCENT_CONFIG,
-  ADX_CONFIG,
   RSI_CONFIG,
   TRADING_WORKFLOW_CONFIG,
 } from "../constants/ta";
+import type { NewTechnicalAnalysis } from "../db";
+import { convertToString } from "../utils";
+import { generateId } from "../utils/id";
+import { logger } from "../utils/logger";
 
 export type OHLCVData = {
   timestamp: number;
@@ -305,5 +305,6 @@ export const convertTAtoDbFormat = (
     adx: convertToString(analysis.adx),
     adx_direction: analysis.adxDirection || null,
     rsi: convertToString(analysis.rsi),
+    signalGenerated: false,
   };
 };

@@ -1,29 +1,31 @@
-import { eq, notInArray, sql, desc, and, getTableName, getTableColumns } from "drizzle-orm";
+import { AIMessage, HumanMessage, type BaseMessage } from "@langchain/core/messages";
+import { and, desc, eq, getTableColumns, getTableName, notInArray, sql } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
+import { Result, err, ok } from "neverthrow";
+import { BATCH_PROCESSING, QUERY_LIMITS } from "../constants/database";
 import {
-  getDB,
-  type NewUser,
+  NewSignal,
+  NewToken,
+  Signal,
   Token,
   User,
-  users,
-  tokenOHLCV,
+  chatMessages,
+  getDB,
+  schema,
+  signal,
   technicalAnalysis,
+  tokenOHLCV,
+  tokens,
+  userTokenHoldings,
+  users,
+  type NewChatMessage,
   type NewTechnicalAnalysis,
+  type NewUser,
   type TechnicalAnalysis,
   type TokenOHLCV,
-  tokens,
-  NewToken,
-  chatMessages,
-  type NewChatMessage,
-  signal,
-  NewSignal,
-  Signal,
-  userTokenHoldings,
   type UserTokenHolding,
 } from "../db";
-import type { PgTable } from "drizzle-orm/pg-core";
 import { logger } from "./logger";
-import { HumanMessage, AIMessage, type BaseMessage } from "@langchain/core/messages";
-import { QUERY_LIMITS, BATCH_PROCESSING } from "../constants/database";
 
 import { getAssetsByOwner } from "../lib/helius";
 
@@ -588,193 +590,375 @@ export const getLatestTokenPrice = async (tokenAddress: string): Promise<number 
   return latestOHLCV[0] ? parseFloat(latestOHLCV[0].close) : undefined;
 };
 
-// Drizzleテーブルからカラム名を抽出する型（keyofを使用してシンプルに）
-type TableColumnNames<T> = keyof T extends string ? keyof T : never;
+// Drizzle ORMの動的型付けによる型安全なbatchUpsert実装
 
-export interface BatchUpsertOptions<TTable extends SchemaTable> {
-  batchSize?: number;
-  maxConcurrent?: number;
-  conflictTarget: Array<TableColumnNames<TTable>>;
-  updateFields: Array<TableColumnNames<TTable>>;
-  logContext?: string;
+/**
+ * Drizzle テーブルからカラム名を動的に抽出する型
+ */
+type ExtractTableColumns<T extends PgTable> = keyof T["_"]["columns"] & string;
+
+/**
+ * スキーマから全テーブルを抽出する型
+ */
+type SchemaTableType = (typeof schema)[keyof typeof schema];
+
+/**
+ * バッチUpsertのオプション型
+ */
+type BatchUpsertOptions<TTable extends PgTable> = {
+  readonly conflictTarget: ReadonlyArray<ExtractTableColumns<TTable>>;
+  readonly updateFields: ReadonlyArray<ExtractTableColumns<TTable>>;
+  readonly batchSize?: number;
+  readonly maxConcurrency?: number;
+};
+
+/**
+ * バッチUpsertの結果型
+ */
+type BatchUpsertResult = {
+  readonly totalUpserted: number;
+  readonly batchCount: number;
+  readonly failedBatches: number;
+  readonly hasErrors: boolean;
+};
+
+/**
+ * バッチUpsertのエラー型
+ */
+type BatchUpsertError = {
+  readonly type: "VALIDATION" | "DATABASE" | "UNKNOWN";
+  readonly message: string;
+  readonly details?: Record<string, unknown>;
+};
+
+/**
+ * バッチ処理結果の型
+ */
+type BatchResult = {
+  readonly success: boolean;
+  readonly count: number;
+  readonly error?: string;
+};
+
+/**
+ * テーブル情報の型
+ */
+type TableInfo<TTable extends PgTable> = {
+  readonly table: TTable;
+  readonly columns: Record<string, any>;
+  readonly name: string;
+  readonly conflictColumns: any[];
+  readonly updateObject: Record<string, any>;
+};
+
+/**
+ * テーブルかどうかを判定する型ガード
+ */
+function isTable(value: any): value is PgTable {
+  return value && typeof value === "object" && value._ && value._.columns;
 }
 
 /**
- * 大量データを効率的にバッチUPSERT処理する型安全な汎用関数
+ * スキーマからテーブルのみを抽出するヘルパー
+ */
+function extractTablesFromSchema(schema: Record<string, any>): Record<string, PgTable> {
+  const tables: Record<string, PgTable> = {};
+
+  for (const [key, value] of Object.entries(schema)) {
+    if (isTable(value)) {
+      tables[key] = value as PgTable;
+    }
+  }
+
+  return tables;
+}
+
+/**
+ * フィールド名の検証を行う
+ */
+function validateFields<TTable extends PgTable>(
+  fields: ReadonlyArray<string>,
+  tableColumns: Record<string, any>,
+  fieldType: "conflictTarget" | "updateFields",
+): Result<ReadonlyArray<string>, BatchUpsertError> {
+  const invalidFields = fields.filter((field) => !(field in tableColumns));
+
+  if (invalidFields.length > 0) {
+    return err({
+      type: "VALIDATION",
+      message: `Invalid ${fieldType} fields: ${invalidFields.join(", ")}`,
+      details: { invalidFields, fieldType },
+    });
+  }
+
+  return ok(fields);
+}
+
+/**
+ * データベースカラム名を取得する
+ */
+function getDbColumnName(fieldName: string, tableColumns: Record<string, any>): string {
+  const column = tableColumns[fieldName];
+  if (column && typeof column === "object" && "name" in column) {
+    return (column as { name: string }).name;
+  }
+  return fieldName;
+}
+
+/**
+ * テーブル情報を準備する
+ */
+function prepareTableInfo<TTable extends PgTable, TData extends Record<string, any>>(
+  table: TTable,
+  options: BatchUpsertOptions<TTable>,
+): Result<TableInfo<TTable>, BatchUpsertError> {
+  const tableColumns = getTableColumns(table);
+  const tableName = getTableName(table);
+
+  // フィールドの検証
+  const conflictValidation = validateFields(options.conflictTarget, tableColumns, "conflictTarget");
+  if (conflictValidation.isErr()) {
+    return err(conflictValidation.error);
+  }
+
+  const updateValidation = validateFields(options.updateFields, tableColumns, "updateFields");
+  if (updateValidation.isErr()) {
+    return err(updateValidation.error);
+  }
+
+  // UPDATE用のオブジェクト生成
+  const updateObject = options.updateFields.reduce(
+    (acc, field) => {
+      const dbColumnName = getDbColumnName(field, tableColumns);
+      acc[field] = sql.raw(`excluded.${dbColumnName}`);
+      return acc;
+    },
+    {} as Record<string, any>,
+  );
+
+  // CONFLICT用のカラムオブジェクト配列
+  const conflictColumns = options.conflictTarget.map((field) => {
+    const column = tableColumns[field];
+    if (!column) {
+      return err({
+        type: "VALIDATION",
+        message: `Column '${field}' not found in table ${tableName}`,
+        details: { field, tableName },
+      });
+    }
+    return column;
+  });
+
+  // エラーチェック
+  const errorResult = conflictColumns.find((col) => typeof col === "object" && "type" in col);
+  if (errorResult && "type" in errorResult) {
+    return errorResult as Result<never, BatchUpsertError>;
+  }
+
+  return ok({
+    table,
+    columns: tableColumns,
+    name: tableName,
+    conflictColumns: conflictColumns as any[],
+    updateObject,
+  });
+}
+
+/**
+ * データの整合性をチェックする
+ */
+function validateBatchData<TData extends Record<string, any>>(
+  batch: TData[],
+  options: BatchUpsertOptions<any>,
+  batchNumber: number,
+): void {
+  if (batch.length === 0) return;
+
+  const sampleRecord = batch[0];
+  const recordKeys = Object.keys(sampleRecord);
+
+  const missingConflictFields = options.conflictTarget.filter((field) => !recordKeys.includes(field));
+  const missingUpdateFields = options.updateFields.filter((field) => !recordKeys.includes(field));
+
+  if (missingConflictFields.length > 0) {
+    logger.warn(`Batch ${batchNumber}: Missing conflictTarget fields in data: ${missingConflictFields.join(", ")}`);
+  }
+  if (missingUpdateFields.length > 0) {
+    logger.warn(`Batch ${batchNumber}: Missing updateFields in data: ${missingUpdateFields.join(", ")}`);
+  }
+}
+
+/**
+ * 単一バッチの処理を実行する
+ */
+async function processBatch<TData extends Record<string, any>>(
+  batch: TData[],
+  batchNumber: number,
+  totalBatches: number,
+  tableInfo: TableInfo<any>,
+  options: BatchUpsertOptions<any>,
+): Promise<BatchResult> {
+  try {
+    // データ整合性の事前チェック
+    validateBatchData(batch, options, batchNumber);
+
+    const db = getDB();
+    await db.insert(tableInfo.table).values(batch).onConflictDoUpdate({
+      target: tableInfo.conflictColumns,
+      set: tableInfo.updateObject,
+    });
+
+    logger.info(`Batch ${batchNumber}/${totalBatches} completed: ${batch.length} records`);
+    return { success: true, count: batch.length };
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    logger.error(`Batch ${batchNumber}/${totalBatches} failed:`, {
+      error: errorMessage,
+      batchSize: batch.length,
+      tableName: tableInfo.name,
+      conflictTarget: options.conflictTarget,
+      updateFields: options.updateFields,
+    });
+    return { success: false, count: 0, error: errorMessage };
+  }
+}
+
+/**
+ * データを指定サイズのバッチに分割する
+ */
+function createBatches<TData>(data: TData[], batchSize: number): TData[][] {
+  const batches: TData[][] = [];
+  for (let i = 0; i < data.length; i += batchSize) {
+    batches.push(data.slice(i, i + batchSize));
+  }
+  return batches;
+}
+
+/**
+ * バッチ結果を集計する
+ */
+function aggregateResults(batchResults: BatchResult[], totalBatches: number, tableName: string): BatchUpsertResult {
+  let totalUpserted = 0;
+  let failedBatches = 0;
+
+  batchResults.forEach((result) => {
+    if (result.success) {
+      totalUpserted += result.count;
+    } else {
+      failedBatches++;
+    }
+  });
+
+  const hasErrors = failedBatches > 0;
+  const successfulBatches = totalBatches - failedBatches;
+
+  if (hasErrors) {
+    logger.warn(
+      `Batch upsert completed with errors: ${successfulBatches}/${totalBatches} batches successful, ${totalUpserted} records processed`,
+    );
+  } else {
+    logger.info(`Batch upsert completed successfully: ${totalUpserted} records processed for table '${tableName}'`);
+  }
+
+  return {
+    totalUpserted,
+    batchCount: totalBatches,
+    failedBatches,
+    hasErrors,
+  };
+}
+
+/**
+ * 型安全な動的batchUpsert関数
  *
- * Drizzleのschemaオブジェクトから動的に全テーブルの型を推論し、
- * 定義されたテーブルのみを受け入れるため、新しいテーブル追加時も
- * メンテナンス不要です。
+ * @template TTable - Drizzleテーブルの型
+ * @template TData - 挿入するデータの型
+ * @param table - Drizzleテーブルオブジェクト
+ * @param data - 挿入するデータの配列
+ * @param options - バッチUpsertオプション
+ * @returns バッチ処理結果
  *
  * @example
- * // tokenOHLCVテーブルの例
- * await batchUpsert(tokenOHLCV, ohlcvData, {
- *   conflictTarget: ['token', 'timestamp'],
- *   updateFields: ['open', 'high', 'low', 'close', 'volume'],
- *   logContext: "updateTokenOHLCV"
+ * ```typescript
+ * // technicalAnalysisテーブルへの挿入
+ * const result = await batchUpsert(technicalAnalysis, analysisData, {
+ *   conflictTarget: ["id"],
+ *   updateFields: ["vwap", "rsi", "signalGenerated"]
  * });
  *
- * // usersテーブルの例
- * await batchUpsert(users, userData, {
- *   conflictTarget: ['userId'],
- *   updateFields: ['walletAddress', 'age'],
- *   logContext: "updateUsers"
- * });
- *
- * @param table Drizzleのschemaで定義された任意のテーブル（自動で型推論）
- * @param data 挿入するデータの配列
- * @param options バッチ処理オプション
+ * console.log(`Successfully processed ${result.totalUpserted} records`);
+ * ```
  */
-// schemaから動的に全テーブルの型を生成（Relationを除外）
-type SchemaTable = typeof users | typeof tokenOHLCV | typeof technicalAnalysis | typeof tokens | typeof chatMessages;
-
-export const batchUpsert = async <T extends Record<string, any>>(
-  table: SchemaTable,
-  data: T[],
-  options: {
-    conflictTarget: Array<TableColumnNames<T>>;
-    updateFields: Array<TableColumnNames<T>>;
-    batchSize?: number;
-    maxConcurrency?: number;
-  },
-): Promise<{ totalUpserted: number; batchCount: number; failedBatches: number; hasErrors: boolean }> => {
+export async function batchUpsert<TTable extends PgTable, TData extends Record<string, any>>(
+  table: TTable,
+  data: TData[],
+  options: BatchUpsertOptions<TTable>,
+): Promise<BatchUpsertResult> {
+  // 早期リターン：空データの場合
   if (!data || data.length === 0) {
     logger.warn("No data provided for batch upsert");
     return { totalUpserted: 0, batchCount: 0, failedBatches: 0, hasErrors: false };
   }
 
-  const batchSize = options.batchSize || BATCH_PROCESSING.DEFAULT_BATCH_SIZE;
-  const maxConcurrency = options.maxConcurrency || BATCH_PROCESSING.MAX_CONCURRENT_BATCHES;
-  const batches: T[][] = [];
+  // 設定値の取得
+  const batchSize = options.batchSize ?? BATCH_PROCESSING.DEFAULT_BATCH_SIZE;
+  const maxConcurrency = options.maxConcurrency ?? BATCH_PROCESSING.MAX_CONCURRENT_BATCHES;
 
-  // データをバッチに分割
-  for (let i = 0; i < data.length; i += batchSize) {
-    batches.push(data.slice(i, i + batchSize));
+  // テーブル情報の準備
+  const tableInfoResult = prepareTableInfo(table, options);
+  if (tableInfoResult.isErr()) {
+    const errorMessage = `BatchUpsert validation failed: ${tableInfoResult.error.message}`;
+    logger.error(errorMessage);
+    throw new Error(errorMessage);
   }
+
+  const tableInfo = tableInfoResult.value;
+
+  // バッチの作成
+  const batches = createBatches(data, batchSize);
 
   logger.info(
-    `Processing ${data.length} records in ${batches.length} batches (size: ${batchSize}, concurrency: ${maxConcurrency})`,
+    `Processing ${data.length} records in ${batches.length} batches (size: ${batchSize}, concurrency: ${maxConcurrency}) for table '${tableInfo.name}'`,
   );
 
-  let totalUpserted = 0;
-  let failedBatches = 0;
+  try {
+    // バッチ並行処理
+    const allResults: BatchResult[] = [];
 
-  // バッチを並行処理（制限付き）
-  for (let i = 0; i < batches.length; i += maxConcurrency) {
-    const currentBatches = batches.slice(i, i + maxConcurrency);
-    const batchPromises = currentBatches.map(async (batch, index) => {
-      const batchNumber = i + index + 1;
+    for (let i = 0; i < batches.length; i += maxConcurrency) {
+      const currentBatches = batches.slice(i, i + maxConcurrency);
 
-      try {
-        const db = getDB();
+      const batchPromises = currentBatches.map((batch, index) =>
+        processBatch(batch, i + index + 1, batches.length, tableInfo, options),
+      );
 
-        // 実行時検証: conflictTargetとupdateFieldsがテーブルのカラム名と一致するかチェック
-        const sampleRecord = batch[0];
-        if (sampleRecord && typeof sampleRecord === "object") {
-          const recordKeys = Object.keys(sampleRecord);
+      const batchResults = await Promise.all(batchPromises);
+      allResults.push(...batchResults);
+    }
 
-          // conflictTargetの検証
-          const invalidConflictFields = options.conflictTarget.filter((field) => !recordKeys.includes(field));
-          if (invalidConflictFields.length > 0) {
-            logger.warn(`Invalid conflict target fields: ${invalidConflictFields.join(", ")}`);
-          }
-
-          // updateFieldsの検証
-          const invalidUpdateFields = options.updateFields.filter((field) => !recordKeys.includes(field));
-          if (invalidUpdateFields.length > 0) {
-            logger.warn(`Invalid update fields: ${invalidUpdateFields.join(", ")}`);
-          }
-        }
-
-        // テーブルのカラム情報を型安全に取得
-        const tableColumns = getTableColumns(table);
-
-        // フィールド名からデータベースカラム名へのマッピング
-        const getColumnName = (fieldName: string): string => {
-          const column = tableColumns[fieldName as keyof typeof tableColumns];
-          if (column && typeof column === "object" && "name" in column) {
-            return (column as { name: string }).name;
-          }
-          return fieldName;
-        };
-
-        const updateObject = options.updateFields.reduce(
-          (acc, field) => {
-            const dbColumnName = getColumnName(String(field));
-            acc[field] = sql.raw(`excluded.${dbColumnName}`);
-            return acc;
-          },
-          {} as Record<string, any>,
-        );
-
-        // Convert conflictTarget field names to actual column objects
-        const conflictColumns = options.conflictTarget.map((field) => {
-          const column = tableColumns[String(field) as keyof typeof tableColumns];
-          if (!column) {
-            throw new Error(`Column '${String(field)}' not found in table ${getTableName(table)}`);
-          }
-          return column;
-        });
-
-        await db.insert(table).values(batch).onConflictDoUpdate({
-          target: conflictColumns,
-          set: updateObject,
-        });
-
-        logger.info(`Batch ${batchNumber}/${batches.length} completed: ${batch.length} records`);
-        return { success: true, count: batch.length };
-      } catch (error) {
-        logger.error(`Batch ${batchNumber}/${batches.length} failed:`, {
-          error: error instanceof Error ? error.message : String(error),
-          batchSize: batch.length,
-          firstRecord: batch[0] ? JSON.stringify(batch[0]).substring(0, 500) : "N/A",
-          conflictTarget: options.conflictTarget,
-          updateFields: options.updateFields,
-          tableName: getTableName(table),
-        });
-
-        // データの詳細をデバッグ出力
-        if (batch.length > 0) {
-          logger.debug("Failed batch sample data:", {
-            sampleRecords: batch.slice(0, 3).map((record, index) => ({
-              index,
-              record: JSON.stringify(record).substring(0, 300),
-              keys: Object.keys(record),
-            })),
-          });
-        }
-
-        // エラーが発生してもthrowしない、結果オブジェクトを返す
-        return { success: false, count: 0 };
-      }
-    });
-
-    // Promise.allを使って、個別のバッチエラーでも他のバッチを継続
-    const batchResults = await Promise.all(batchPromises);
-
-    // 結果を集計
-    batchResults.forEach((result) => {
-      if (result.success) {
-        totalUpserted += result.count;
-      } else {
-        failedBatches++;
-      }
-    });
+    // 結果の集計
+    return aggregateResults(allResults, batches.length, tableInfo.name);
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    logger.error(`Batch upsert failed for table '${tableInfo.name}':`, { error: errorMessage });
+    throw new Error(errorMessage);
   }
+}
 
-  const hasErrors = failedBatches > 0;
-  const successfulBatches = batches.length - failedBatches;
+/**
+ * スキーマから利用可能なテーブルの一覧を取得するヘルパー関数
+ */
+export function getAvailableTables(): Record<string, PgTable> {
+  return extractTablesFromSchema(schema);
+}
 
-  if (hasErrors) {
-    logger.warn(
-      `Batch upsert completed with errors: ${successfulBatches}/${batches.length} batches successful, ${totalUpserted} records processed`,
-    );
-  } else {
-    logger.info(`Successfully upserted ${totalUpserted} records in ${batches.length} batches`);
-  }
-
-  return { totalUpserted, batchCount: batches.length, failedBatches, hasErrors };
-};
+/**
+ * 指定されたテーブルの利用可能なカラム名を取得するヘルパー関数
+ */
+export function getTableColumnNames<T extends PgTable>(table: T): Array<ExtractTableColumns<T>> {
+  const columns = getTableColumns(table);
+  return Object.keys(columns) as Array<ExtractTableColumns<T>>;
+}
 
 /**
  * 古いOHLCVデータを定期的にクリーンアップする
@@ -844,39 +1028,112 @@ export const cleanupAllTokensOHLCVByCount = async (keepCount: number = 1000): Pr
 };
 
 /**
- * 全ユーザーのトークン保有状況を同期する
- * @param batchSize 一度に処理するユーザー数（デフォルト：10）
+ * 単一ユーザーのトークン保有状況同期処理
  */
-export const syncAllUserTokenHoldings = async (batchSize: number = 10): Promise<void> => {
+async function syncUserHoldings(user: User): Promise<Result<string, string>> {
+  if (!user.walletAddress) {
+    const error = `User ${user.userId} has no wallet address`;
+    logger.warn(error);
+    return err(error);
+  }
+
+  try {
+    await updateUserTokenHoldings(user.userId, user.walletAddress);
+    logger.info(`Synced holdings for user ${user.userId}`);
+    return ok(user.userId);
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    logger.error(`Failed to sync holdings for user ${user.userId}`, { error: errorMessage });
+    return err(errorMessage);
+  }
+}
+
+/**
+ * バッチ処理で複数ユーザーのトークン保有状況を同期
+ */
+async function processBatchUserSync(
+  users: User[],
+  batchNumber: number,
+  totalBatches: number,
+): Promise<{ successCount: number; failureCount: number }> {
+  logger.info(`Processing batch ${batchNumber}/${totalBatches} with ${users.length} users`);
+
+  const results = await Promise.all(users.map(syncUserHoldings));
+
+  const successCount = results.filter((result) => result.isOk()).length;
+  const failureCount = results.length - successCount;
+
+  logger.info(`Batch ${batchNumber}/${totalBatches} completed: ${successCount} success, ${failureCount} failures`);
+
+  return { successCount, failureCount };
+}
+
+/**
+ * API Rate Limitingのための遅延処理
+ */
+async function delayBetweenBatches(delayMs: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, delayMs));
+}
+
+/**
+ * 全ユーザーのトークン保有状況を同期する
+ *
+ * @param options - 同期オプション
+ * @param options.batchSize - 一度に処理するユーザー数（デフォルト：10）
+ * @param options.delayMs - バッチ間の遅延時間（デフォルト：1000ms）
+ * @returns 同期結果の統計情報
+ */
+export const syncAllUserTokenHoldings = async (
+  options: {
+    batchSize?: number;
+    delayMs?: number;
+  } = {},
+): Promise<{ totalUsers: number; successCount: number; failureCount: number }> => {
+  const { batchSize = 10, delayMs = 1000 } = options;
+
   const allUsers = await getUsers();
-  const usersWithWallets = allUsers.filter((user) => user.walletAddress);
+  logger.info(`Starting token holdings sync for ${allUsers.length} users (batch size: ${batchSize})`);
 
-  logger.info(`Starting token holdings sync for ${usersWithWallets.length} users`);
+  if (allUsers.length === 0) {
+    logger.info("No users found to sync");
+    return { totalUsers: 0, successCount: 0, failureCount: 0 };
+  }
 
-  // バッチ処理で実行
-  for (let i = 0; i < usersWithWallets.length; i += batchSize) {
-    const batch = usersWithWallets.slice(i, i + batchSize);
+  // バッチに分割
+  const batches: User[][] = [];
+  for (let i = 0; i < allUsers.length; i += batchSize) {
+    batches.push(allUsers.slice(i, i + batchSize));
+  }
 
-    const batchPromises = batch.map(async (user) => {
-      try {
-        await updateUserTokenHoldings(user.userId, user.walletAddress!);
-        logger.info(`Synced holdings for user ${user.userId}`);
-      } catch (error) {
-        logger.error(`Failed to sync holdings for user ${user.userId}`, {
-          error: error instanceof Error ? error.message : String(error),
-        });
-      }
-    });
+  let totalSuccessCount = 0;
+  let totalFailureCount = 0;
 
-    await Promise.all(batchPromises);
+  // バッチごとに処理
+  for (let i = 0; i < batches.length; i++) {
+    const batch = batches[i];
+    const batchNumber = i + 1;
 
-    // API rate limitingを考慮して、バッチ間で少し待機
-    if (i + batchSize < usersWithWallets.length) {
-      await new Promise((resolve) => setTimeout(resolve, 1000)); // 1秒待機
+    const batchResult = await processBatchUserSync(batch, batchNumber, batches.length);
+
+    totalSuccessCount += batchResult.successCount;
+    totalFailureCount += batchResult.failureCount;
+
+    // 最後のバッチ以外では遅延を挟む
+    if (i < batches.length - 1) {
+      logger.debug(`Waiting ${delayMs}ms before next batch...`);
+      await delayBetweenBatches(delayMs);
     }
   }
 
-  logger.info(`Completed token holdings sync for all users`);
+  logger.info(
+    `Completed token holdings sync: ${totalSuccessCount} success, ${totalFailureCount} failures out of ${allUsers.length} users`,
+  );
+
+  return {
+    totalUsers: allUsers.length,
+    successCount: totalSuccessCount,
+    failureCount: totalFailureCount,
+  };
 };
 
 /**

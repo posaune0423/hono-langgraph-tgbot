@@ -1,25 +1,23 @@
-import { logger } from "./utils/logger";
-import {
-  getTokens,
-  batchUpsert,
-  getTokenOHLCV,
-  createTechnicalAnalysis,
-  cleanupAllTokensOHLCVByCount,
-  createSignal,
-  getRecentSignals,
-  getUsersHoldingToken,
-  getTokenSymbol,
-  getLatestTokenPrice,
-  syncAllUserTokenHoldings,
-  getUnprocessedTechnicalAnalyses,
-  markTechnicalAnalysisAsProcessed,
-} from "./utils/db";
-import { fetchMultipleTokenOHLCV } from "./lib/vybe";
-import { getTACache } from "./lib/ta-cache";
+import { OHLCV_RETENTION } from "./constants/database";
 import { tokenOHLCV, type User } from "./db";
 import { calculateTechnicalIndicators, convertTAtoDbFormat, type OHLCVData } from "./lib/ta";
-import { OHLCV_RETENTION } from "./constants/database";
+import { getTACache } from "./lib/ta-cache";
 import { getBotInstance } from "./lib/telegram/bot";
+import { fetchMultipleTokenOHLCV } from "./lib/vybe";
+import {
+  batchUpsert,
+  cleanupAllTokensOHLCVByCount,
+  createSignal,
+  createTechnicalAnalysis,
+  getRecentSignals,
+  getTokenOHLCV,
+  getTokens,
+  getUnprocessedTechnicalAnalyses,
+  getUsersHoldingToken,
+  markTechnicalAnalysisAsProcessed,
+  syncAllUserTokenHoldings,
+} from "./utils/db";
+import { logger } from "./utils/logger";
 
 // every 5 minutes
 export const runCronTasks = async () => {
@@ -386,8 +384,14 @@ const syncUserTokenHoldingsTask = async () => {
   logger.info("Starting user token holdings synchronization");
 
   try {
-    await syncAllUserTokenHoldings(5); // バッチサイズを5に設定（API制限を考慮）
-    logger.info("Successfully completed user token holdings synchronization");
+    const result = await syncAllUserTokenHoldings();
+
+    logger.info("Successfully completed user token holdings synchronization", {
+      totalUsers: result.totalUsers,
+      successCount: result.successCount,
+      failureCount: result.failureCount,
+      successRate: result.totalUsers > 0 ? ((result.successCount / result.totalUsers) * 100).toFixed(1) + "%" : "0%",
+    });
   } catch (error) {
     logger.error("Failed to sync user token holdings", {
       error: error instanceof Error ? error.message : String(error),
