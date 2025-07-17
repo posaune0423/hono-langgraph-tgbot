@@ -7,7 +7,14 @@ import { SetupStep } from "../../types";
 import { proceedToNextStep } from "./command";
 import { isValidSolanaAddress } from "../../utils/solana";
 import { dumpTokenUsage, isAnalyzerMessage, isGeneralistMessage } from "../../utils";
-import { getUserProfile, updateUserProfile, getChatHistory, saveChatMessage, createTokens, updateUserTokenHoldings } from "../../utils/db";
+import {
+  getUserProfile,
+  updateUserProfile,
+  getChatHistory,
+  saveChatMessage,
+  createTokens,
+  updateUserTokenHoldings,
+} from "../../utils/db";
 import { createTimeoutPromise } from "../../utils";
 import { getAssetsByOwner } from "../helius";
 import type { NewToken } from "../../db";
@@ -202,7 +209,7 @@ export const setupHandler = (bot: Bot) => {
           dumpTokenUsage(chunk);
         }
 
-                // Process the final response
+        // Process the final response
         if (latestAgentMessage) {
           if (!ctx.chat?.id) return;
           await ctx.api.deleteMessage(ctx.chat.id, thinkingMessage.message_id);
@@ -220,7 +227,9 @@ export const setupHandler = (bot: Bot) => {
           await ctx.reply("I'm sorry, I couldn't process your request at the moment. Please try again.");
 
           // Save error response to database
-          const errorMessage = new AIMessage("I'm sorry, I couldn't process your request at the moment. Please try again.");
+          const errorMessage = new AIMessage(
+            "I'm sorry, I couldn't process your request at the moment. Please try again.",
+          );
           await saveChatMessage(userId, errorMessage);
         }
       } catch (error: unknown) {
@@ -231,7 +240,9 @@ export const setupHandler = (bot: Bot) => {
           await ctx.reply("I'm sorry, the operation took too long and timed out. Please try again.");
 
           // Save timeout error message to database
-          const timeoutMessage = new AIMessage("I'm sorry, the operation took too long and timed out. Please try again.");
+          const timeoutMessage = new AIMessage(
+            "I'm sorry, the operation took too long and timed out. Please try again.",
+          );
           await saveChatMessage(userId, timeoutMessage);
         } else {
           logger.error("message handler", "Error processing stream:", error);

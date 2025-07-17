@@ -1,4 +1,4 @@
-import { eq, notInArray, sql, desc, and, getTableName } from "drizzle-orm";
+import { eq, notInArray, sql, desc, and, getTableName, getTableColumns } from "drizzle-orm";
 import {
   getDB,
   type NewUser,
@@ -20,6 +20,7 @@ import {
   userTokenHoldings,
   type UserTokenHolding,
 } from "../db";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { logger } from "./logger";
 import { HumanMessage, AIMessage, type BaseMessage } from "@langchain/core/messages";
 import { QUERY_LIMITS, BATCH_PROCESSING } from "../constants/database";
@@ -685,16 +686,35 @@ export const batchUpsert = async <T extends Record<string, any>>(
           }
         }
 
+        // テーブルのカラム情報を型安全に取得
+        const tableColumns = getTableColumns(table);
+
+        // フィールド名からデータベースカラム名へのマッピング
+        const getColumnName = (fieldName: string): string => {
+          const column = tableColumns[fieldName as keyof typeof tableColumns];
+          if (column && typeof column === "object" && "name" in column) {
+            return (column as { name: string }).name;
+          }
+          return fieldName;
+        };
+
         const updateObject = options.updateFields.reduce(
           (acc, field) => {
-            acc[field] = sql.raw(`excluded.${String(field)}`);
+            const dbColumnName = getColumnName(String(field));
+            acc[field] = sql.raw(`excluded.${dbColumnName}`);
             return acc;
           },
           {} as Record<string, any>,
         );
 
         // Convert conflictTarget field names to actual column objects
-        const conflictColumns = options.conflictTarget.map((field) => (table as any)[field]);
+        const conflictColumns = options.conflictTarget.map((field) => {
+          const column = tableColumns[String(field) as keyof typeof tableColumns];
+          if (!column) {
+            throw new Error(`Column '${String(field)}' not found in table ${getTableName(table)}`);
+          }
+          return column;
+        });
 
         await db.insert(table).values(batch).onConflictDoUpdate({
           target: conflictColumns,

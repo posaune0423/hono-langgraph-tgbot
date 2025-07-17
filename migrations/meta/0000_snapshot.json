@@ -210,12 +210,8 @@
           "name": "chat_messages_user_id_users_user_id_fk",
           "tableFrom": "chat_messages",
           "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "user_id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["user_id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -299,9 +295,7 @@
         "tokens_symbol_unique": {
           "name": "tokens_symbol_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "symbol"
-          ]
+          "columns": ["symbol"]
         }
       },
       "policies": {},
@@ -398,12 +392,8 @@
           "name": "token_ohlcv_token_tokens_address_fk",
           "tableFrom": "token_ohlcv",
           "tableTo": "tokens",
-          "columnsFrom": [
-            "token"
-          ],
-          "columnsTo": [
-            "address"
-          ],
+          "columnsFrom": ["token"],
+          "columnsTo": ["address"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -411,10 +401,7 @@
       "compositePrimaryKeys": {
         "token_ohlcv_token_timestamp_pk": {
           "name": "token_ohlcv_token_timestamp_pk",
-          "columns": [
-            "token",
-            "timestamp"
-          ]
+          "columns": ["token", "timestamp"]
         }
       },
       "uniqueConstraints": {},
@@ -531,12 +518,8 @@
           "name": "technical_analysis_token_tokens_address_fk",
           "tableFrom": "technical_analysis",
           "tableTo": "tokens",
-          "columnsFrom": [
-            "token"
-          ],
-          "columnsTo": [
-            "address"
-          ],
+          "columnsFrom": ["token"],
+          "columnsTo": ["address"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -671,12 +654,8 @@
           "name": "signal_token_tokens_address_fk",
           "tableFrom": "signal",
           "tableTo": "tokens",
-          "columnsFrom": [
-            "token"
-          ],
-          "columnsTo": [
-            "address"
-          ],
+          "columnsFrom": ["token"],
+          "columnsTo": ["address"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -892,12 +871,8 @@
           "name": "user_token_holdings_user_id_users_user_id_fk",
           "tableFrom": "user_token_holdings",
           "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "user_id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["user_id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -905,12 +880,8 @@
           "name": "user_token_holdings_token_address_tokens_address_fk",
           "tableFrom": "user_token_holdings",
           "tableTo": "tokens",
-          "columnsFrom": [
-            "token_address"
-          ],
-          "columnsTo": [
-            "address"
-          ],
+          "columnsFrom": ["token_address"],
+          "columnsTo": ["address"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -918,20 +889,14 @@
       "compositePrimaryKeys": {
         "user_token_holdings_user_id_token_address_pk": {
           "name": "user_token_holdings_user_id_token_address_pk",
-          "columns": [
-            "user_id",
-            "token_address"
-          ]
+          "columns": ["user_id", "token_address"]
         }
       },
       "uniqueConstraints": {
         "user_token_holdings_user_token_unique": {
           "name": "user_token_holdings_user_token_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "user_id",
-            "token_address"
-          ]
+          "columns": ["user_id", "token_address"]
         }
       },
       "policies": {},
