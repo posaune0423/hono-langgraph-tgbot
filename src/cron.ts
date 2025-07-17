@@ -42,7 +42,7 @@ export const runCronTasks = async () => {
   }
 
   // 5. ユーザーのトークン保有状況を同期
-  await syncUserTokenHoldingsTask();
+  // await syncUserTokenHoldingsTask();
 
   logger.info(`cron end: ${new Date().toISOString()}`);
 };

@@ -509,54 +509,51 @@ export const updateUserTokenHoldings = async (
     const currentTokenAddresses = new Set(currentHoldings.map((h) => h.tokenAddress));
     const newTokenAddresses = new Set(userTokens.map((t) => t.address));
 
-    // 差分を計算
-    const tokensToAdd = userTokens.filter((token) => !currentTokenAddresses.has(token.address));
-    const tokensToRemove = currentHoldings.filter((holding) => !newTokenAddresses.has(holding.tokenAddress));
-    const tokensToUpdate = userTokens.filter((token) => currentTokenAddresses.has(token.address));
-
-    // 新しいトークンを追加
-    if (tokensToAdd.length > 0) {
-      const holdingsToAdd = tokensToAdd.map((token) => ({
+    // 全ての現在保有トークンをupsert（新規追加 + 既存更新）
+    if (userTokens.length > 0) {
+      const holdings = userTokens.map((token) => ({
         userId,
         tokenAddress: token.address,
         lastVerifiedAt: new Date(),
       }));
 
-      await db.insert(userTokenHoldings).values(holdingsToAdd).onConflictDoNothing();
-      logger.info(`Added ${tokensToAdd.length} new token holdings for user ${userId}`, {
-        addedTokens: tokensToAdd.map((t) => t.symbol),
+      await db
+        .insert(userTokenHoldings)
+        .values(holdings)
+        .onConflictDoUpdate({
+          target: [userTokenHoldings.userId, userTokenHoldings.tokenAddress],
+          set: {
+            lastVerifiedAt: new Date(),
+          },
+        });
+
+      logger.info(`Upserted ${userTokens.length} token holdings for user ${userId}`, {
+        allTokens: userTokens.map((t) => t.symbol),
       });
     }
 
-    // 既存のトークンの lastVerifiedAt を更新
-    if (tokensToUpdate.length > 0) {
-      const updatePromises = tokensToUpdate.map((token) =>
-        db
-          .update(userTokenHoldings)
-          .set({ lastVerifiedAt: new Date() })
-          .where(and(eq(userTokenHoldings.userId, userId), eq(userTokenHoldings.tokenAddress, token.address))),
-      );
-
-      await Promise.all(updatePromises);
-      logger.info(`Updated ${tokensToUpdate.length} existing token holdings for user ${userId}`);
-    }
-
     // 保有していないトークンを削除
+    const tokensToRemove = currentHoldings.filter((holding) => !newTokenAddresses.has(holding.tokenAddress));
     if (tokensToRemove.length > 0) {
       const tokenAddressesToRemove = tokensToRemove.map((h) => h.tokenAddress);
       await db
         .delete(userTokenHoldings)
-        .where(and(eq(userTokenHoldings.userId, userId), inArray(userTokenHoldings.tokenAddress, tokenAddressesToRemove)));
+        .where(
+          and(eq(userTokenHoldings.userId, userId), inArray(userTokenHoldings.tokenAddress, tokenAddressesToRemove)),
+        );
 
       logger.info(`Removed ${tokensToRemove.length} token holdings for user ${userId}`, {
         removedTokens: tokenAddressesToRemove,
       });
     }
 
+    const tokensAdded = userTokens.filter((token) => !currentTokenAddresses.has(token.address)).length;
+    const tokensUpdated = userTokens.filter((token) => currentTokenAddresses.has(token.address)).length;
+
     logger.info(`Successfully synced token holdings for user ${userId}`, {
       totalCurrentTokens: userTokens.length,
-      tokensAdded: tokensToAdd.length,
-      tokensUpdated: tokensToUpdate.length,
+      tokensAdded,
+      tokensUpdated,
       tokensRemoved: tokensToRemove.length,
       walletAddress,
     });
