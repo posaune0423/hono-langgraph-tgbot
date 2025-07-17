@@ -93,24 +93,44 @@ export interface AdminBroadcastRequest {
   excludeUserIds?: string[]; // Optional: exclude specific users
 }
 
+// Updated BroadcastResult type with detailed results
 export interface BroadcastResult {
-  userId: string;
-  success: boolean;
-  messageId?: number;
-  error?: string;
+  totalUsers: number;
+  successCount: number;
+  failureCount: number;
+  failedUsers: string[];
+  results: Array<{
+    userId: string;
+    success: boolean;
+    messageId?: number;
+    error?: string;
+  }>;
 }
 
 export interface AdminBroadcastResponse {
   success: boolean;
   totalUsers: number;
-  results: BroadcastResult[];
+  results: Array<{
+    userId: string;
+    success: boolean;
+    messageId?: number;
+    error?: string;
+  }>;
+  error?: string;
 }
 
 // neverthrow error types
 export type TelegramError = {
-  type: "forbidden" | "network" | "invalid_user" | "rate_limit" | "unknown";
+  type: "forbidden" | "rate_limit" | "invalid_user" | "network" | "bot_error" | "unknown";
   message: string;
   userId?: string;
+};
+
+// Legacy broadcast error type for backwards compatibility
+export type TelegramBroadcastError = {
+  type: "bot_error" | "send_error" | "db_error";
+  message: string;
+  failedUsers?: string[];
 };
 
 export type DatabaseError = {
