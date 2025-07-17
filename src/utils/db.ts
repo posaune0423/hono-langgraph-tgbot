@@ -1,5 +1,5 @@
 import { AIMessage, HumanMessage, type BaseMessage } from "@langchain/core/messages";
-import { and, desc, eq, getTableColumns, getTableName, notInArray, sql } from "drizzle-orm";
+import { and, desc, eq, getTableColumns, getTableName, inArray, notInArray, sql } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 import { Result, err, ok } from "neverthrow";
 import { BATCH_PROCESSING, QUERY_LIMITS } from "../constants/database";
@@ -500,22 +500,64 @@ export const updateUserTokenHoldings = async (
       userTokens = await createTokens(tokenData);
     }
 
-    // 既存の保有記録を削除
-    await db.delete(userTokenHoldings).where(eq(userTokenHoldings.userId, userId));
+    // 現在のユーザーのトークン保有状況を取得
+    const currentHoldings = await db
+      .select({ tokenAddress: userTokenHoldings.tokenAddress })
+      .from(userTokenHoldings)
+      .where(eq(userTokenHoldings.userId, userId));
 
-    // 新しい保有記録を挿入（amountカラムを削除）
-    if (userTokens.length === 0) return;
+    const currentTokenAddresses = new Set(currentHoldings.map((h) => h.tokenAddress));
+    const newTokenAddresses = new Set(userTokens.map((t) => t.address));
 
-    const holdings = userTokens.map((token) => ({
-      userId,
-      tokenAddress: token.address,
-      lastVerifiedAt: new Date(),
-    }));
+    // 差分を計算
+    const tokensToAdd = userTokens.filter((token) => !currentTokenAddresses.has(token.address));
+    const tokensToRemove = currentHoldings.filter((holding) => !newTokenAddresses.has(holding.tokenAddress));
+    const tokensToUpdate = userTokens.filter((token) => currentTokenAddresses.has(token.address));
 
-    await db.insert(userTokenHoldings).values(holdings).onConflictDoNothing();
+    // 新しいトークンを追加
+    if (tokensToAdd.length > 0) {
+      const holdingsToAdd = tokensToAdd.map((token) => ({
+        userId,
+        tokenAddress: token.address,
+        lastVerifiedAt: new Date(),
+      }));
 
-    logger.info(`Updated token holdings for user ${userId}`, {
-      tokenCount: userTokens.length,
+      await db.insert(userTokenHoldings).values(holdingsToAdd).onConflictDoNothing();
+      logger.info(`Added ${tokensToAdd.length} new token holdings for user ${userId}`, {
+        addedTokens: tokensToAdd.map((t) => t.symbol),
+      });
+    }
+
+    // 既存のトークンの lastVerifiedAt を更新
+    if (tokensToUpdate.length > 0) {
+      const updatePromises = tokensToUpdate.map((token) =>
+        db
+          .update(userTokenHoldings)
+          .set({ lastVerifiedAt: new Date() })
+          .where(and(eq(userTokenHoldings.userId, userId), eq(userTokenHoldings.tokenAddress, token.address))),
+      );
+
+      await Promise.all(updatePromises);
+      logger.info(`Updated ${tokensToUpdate.length} existing token holdings for user ${userId}`);
+    }
+
+    // 保有していないトークンを削除
+    if (tokensToRemove.length > 0) {
+      const tokenAddressesToRemove = tokensToRemove.map((h) => h.tokenAddress);
+      await db
+        .delete(userTokenHoldings)
+        .where(and(eq(userTokenHoldings.userId, userId), inArray(userTokenHoldings.tokenAddress, tokenAddressesToRemove)));
+
+      logger.info(`Removed ${tokensToRemove.length} token holdings for user ${userId}`, {
+        removedTokens: tokenAddressesToRemove,
+      });
+    }
+
+    logger.info(`Successfully synced token holdings for user ${userId}`, {
+      totalCurrentTokens: userTokens.length,
+      tokensAdded: tokensToAdd.length,
+      tokensUpdated: tokensToUpdate.length,
+      tokensRemoved: tokensToRemove.length,
       walletAddress,
     });
   } catch (error) {
