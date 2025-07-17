@@ -39,10 +39,10 @@ export const runCronTasks = async () => {
   // 1時間おきにクリーンアップを実行（5分間隔のcronが12回実行されるごと）
   if (start.getMinutes() === 0) {
     await cleanupOHLCVTask();
-
-    // 1時間おきにユーザーのトークン保有状況を同期
-    await syncUserTokenHoldingsTask();
   }
+
+  // 5. ユーザーのトークン保有状況を同期
+  await syncUserTokenHoldingsTask();
 
   logger.info(`cron end: ${new Date().toISOString()}`);
 };
