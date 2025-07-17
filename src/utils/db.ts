@@ -27,6 +27,7 @@ import {
 } from "../db";
 import { logger } from "./logger";
 
+import { Interface } from "helius-sdk";
 import { getAssetsByOwner } from "../lib/helius";
 
 export const getTokens = async (): Promise<Token[]> => {
@@ -41,7 +42,7 @@ export const createTokens = async (newTokens: NewToken[]): Promise<Token[]> => {
     .map((token) => ({
       address: token.address || "",
       name: token.name || "",
-      symbol: token.symbol?.trim() || `NFT_${token.address?.substring(0, 8)}`,
+      symbol: token.symbol?.trim(),
       decimals: token.decimals ?? 0,
       iconUrl: token.iconUrl || "",
     }))
@@ -478,15 +479,21 @@ export const updateUserTokenHoldings = async (
     // tokensが提供されていない場合は、HeliusAPIから取得
     let userTokens = tokens;
     if (!userTokens) {
+      if (!walletAddress?.trim()) {
+        logger.warn(`Empty wallet address for user ${userId}, skipping token holdings update`);
+        return;
+      }
+
       const assets = await getAssetsByOwner(walletAddress);
+
+      if (assets.length === 0) {
+        logger.info(`No assets found for user ${userId} wallet ${walletAddress}`);
+      }
 
       // Fungible tokenのみを抽出してToken形式に変換
       const tokenData = assets
         .filter((asset) => {
-          const interfaceStr = String(asset.interface);
-          return (
-            interfaceStr === "Fungible" || interfaceStr === "FungibleAsset" || (asset.token_info?.decimals ?? 0) > 0
-          );
+          return asset.interface === Interface.FUNGIBLE_ASSET || asset.interface === Interface.FUNGIBLE_TOKEN;
         })
         .map((asset) => ({
           address: asset.id,
@@ -496,15 +503,24 @@ export const updateUserTokenHoldings = async (
           iconUrl: asset.content?.files?.[0]?.uri || "",
         }));
 
+      if (tokenData.length === 0) {
+        logger.info(`No fungible tokens found for user ${userId} after filtering ${assets.length} assets`);
+      }
+
       // tokensテーブルにトークンを作成（外部キー制約のため）
       userTokens = await createTokens(tokenData);
+
+      if (userTokens.length === 0) {
+        logger.info(`No tokens created/found in database for user ${userId}`);
+      }
     }
 
-    // 既存の保有記録を削除
-    await db.delete(userTokenHoldings).where(eq(userTokenHoldings.userId, userId));
-
-    // 新しい保有記録を挿入
+    // 新しいトークンがある場合のみ、既存レコードを更新
     if (userTokens.length > 0) {
+      // 既存の保有記録を削除
+      await db.delete(userTokenHoldings).where(eq(userTokenHoldings.userId, userId));
+
+      // 新しい保有記録を挿入
       const holdings = userTokens.map((token) => ({
         userId,
         tokenAddress: token.address,
@@ -512,6 +528,8 @@ export const updateUserTokenHoldings = async (
       }));
 
       await db.insert(userTokenHoldings).values(holdings);
+    } else {
+      logger.info(`Skipping token holdings update for user ${userId} - no tokens to update`);
     }
 
     logger.info(`Updated token holdings for user ${userId}`, {
