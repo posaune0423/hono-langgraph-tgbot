@@ -1,10 +1,19 @@
+import { InlineKeyboard } from "grammy";
 import { err, ok, type Result } from "neverthrow";
-import type { User } from "../../db";
-import type { BroadcastResult, MessageSentResult, TelegramBroadcastError, TelegramError } from "../../types";
+import type { BroadcastResult, MessageSentResult, TelegramError } from "../../types";
 import { sleep } from "../../utils";
 import { getUserIds } from "../../utils/db";
 import { logger } from "../../utils/logger";
 import { getBotInstance } from "./bot";
+
+/**
+ * Button type for Telegram inline keyboard
+ */
+type TelegramButton = {
+  text: string;
+  url?: string;
+  callback_data?: string;
+};
 
 /**
  * Send message to single user with detailed error handling
@@ -15,19 +24,44 @@ const sendToSingleUser = async (
   options?: {
     parse_mode?: "HTML" | "Markdown" | "MarkdownV2";
     disable_notification?: boolean;
+    buttons?: TelegramButton[];
   },
 ): Promise<Result<MessageSentResult, TelegramError>> => {
   try {
     const bot = getBotInstance();
 
+    // Create inline keyboard if buttons are provided
+    let reply_markup;
+    if (options?.buttons && options.buttons.length > 0) {
+      const keyboard = new InlineKeyboard();
+
+      // Add buttons in rows (2 buttons per row for better mobile UX)
+      options.buttons.forEach((button, index) => {
+        if (button.url) {
+          keyboard.url(button.text, button.url);
+        } else if (button.callback_data) {
+          keyboard.text(button.text, button.callback_data);
+        }
+
+        // Start new row after every 2 buttons
+        if (index % 2 === 1 && index < options.buttons!.length - 1) {
+          keyboard.row();
+        }
+      });
+
+      reply_markup = keyboard;
+    }
+
     const result = await bot.api.sendMessage(userId, message, {
       parse_mode: options?.parse_mode,
       disable_notification: options?.disable_notification ?? false,
+      reply_markup,
     });
 
     logger.info(`Message sent to user ${userId}`, {
       messageId: result.message_id,
       message: message.substring(0, 50) + "...",
+      buttonsCount: options?.buttons?.length || 0,
     });
 
     return ok({
@@ -71,6 +105,7 @@ const processBatch = async (
   options?: {
     parse_mode?: "HTML" | "Markdown" | "MarkdownV2";
     disable_notification?: boolean;
+    buttons?: TelegramButton[];
   },
 ): Promise<
   Array<{
@@ -128,6 +163,7 @@ export const sendMessage = async (
     disable_notification?: boolean;
     batchSize?: number;
     batchDelayMs?: number;
+    buttons?: TelegramButton[];
   },
 ): Promise<Result<BroadcastResult, TelegramError>> => {
   try {
@@ -137,6 +173,7 @@ export const sendMessage = async (
       totalUsers: userIds.length,
       messageLength: message.length,
       parseMode: sendOptions.parse_mode,
+      buttonsCount: sendOptions.buttons?.length || 0,
     });
 
     if (userIds.length === 0) {
@@ -251,46 +288,3 @@ export const broadcastMessage = async (
     });
   }
 };
-
-// Legacy compatibility functions for existing code
-/**
- * @deprecated Use sendMessage instead
- */
-export const broadcastToUsers = async (
-  users: User[],
-  message: string,
-  options?: { parse_mode?: "Markdown" | "HTML"; disable_notification?: boolean },
-): Promise<
-  Result<
-    { totalUsers: number; successCount: number; failureCount: number; failedUsers: string[] },
-    TelegramBroadcastError
-  >
-> => {
-  const userIds = users.map((user) => user.userId);
-
-  const result = await sendMessage(userIds, message, {
-    parse_mode: options?.parse_mode === "Markdown" ? "Markdown" : options?.parse_mode,
-    disable_notification: options?.disable_notification,
-  });
-
-  return result.match(
-    (success) =>
-      ok({
-        totalUsers: success.totalUsers,
-        successCount: success.successCount,
-        failureCount: success.failureCount,
-        failedUsers: success.failedUsers,
-      }),
-    (error) =>
-      err({
-        type: "send_error" as const,
-        message: error.message,
-        failedUsers: [],
-      }),
-  );
-};
-
-/**
- * @deprecated Use broadcastMessage instead
- */
-export const broadcastToAllUsers = broadcastMessage;

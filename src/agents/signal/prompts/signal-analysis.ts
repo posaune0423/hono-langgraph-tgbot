@@ -137,6 +137,7 @@ Analyze the external evidence and provide:
 export const signalFormattingPrompt = new PromptTemplate({
   inputVariables: [
     "tokenSymbol",
+    "tokenAddress",
     "signalType",
     "direction",
     "currentPrice",
@@ -152,12 +153,13 @@ export const signalFormattingPrompt = new PromptTemplate({
 ## Formatting Guidelines
 
 **Message Structure:**
-1. **TOKEN NAME PROMINENCE**: Start with large, eye-catching token symbol
+1. **LARGE TOKEN HEADER**: Start with VERY large, eye-catching token symbol using multiple emojis
 2. **CLEAR ACTION**: Explicitly state what user should do (BUY/SELL/HOLD)
 3. **KEY METRICS**: Direction, confidence, risk level prominently displayed
 4. **TECHNICAL ANALYSIS**: Detailed explanation of why this action is recommended
-5. **RISK WARNING**: Clear timeframe and risk information
-6. **PROFESSIONAL TONE**: Engaging but professional
+5. **CHART ACCESS**: Include direct link to view charts
+6. **RISK WARNING**: Clear timeframe and risk information
+7. **PROFESSIONAL TONE**: Engaging but professional
 
 **User Action Clarity:**
 - Use clear action verbs: "BUY NOW", "SELL POSITION", "HOLD AND MONITOR"
@@ -166,10 +168,15 @@ export const signalFormattingPrompt = new PromptTemplate({
 
 **Telegram Formatting:**
 - Use *italic* and **bold** for emphasis
-- Include relevant emojis for visual appeal (🚀💹📈📉⚠️💰🔍⏰)
+- Include relevant emojis for visual appeal (🚀💹📈📉⚠️💰🔍⏰📊💎🎯🔥)
 - Keep messages concise but informative
 - Use bullet points for clarity
 - Add appropriate risk warnings
+- Make token symbol EXTREMELY PROMINENT with large emojis
+
+**Chart Integration:**
+- Always include DEXScreener chart link for token analysis
+- Format: https://dexscreener.com/solana/{tokenAddress}
 
 **Signal Levels:**
 - Level 1: Technical signals only (basic TA confluence)
@@ -179,6 +186,7 @@ export const signalFormattingPrompt = new PromptTemplate({
 ## Signal Data
 
 **Token**: {tokenSymbol}
+**Token Address**: {tokenAddress}
 **Signal Type**: {signalType}
 **Direction**: {direction}
 **Price**: {currentPrice}
@@ -195,21 +203,16 @@ export const signalFormattingPrompt = new PromptTemplate({
 
 Create a Level 1 Technical Signal message following this EXACT structure:
 
-1. **TOKEN HEADER**: Large token symbol with relevant emoji
-2. **ACTION SECTION**: Clear "📋 **RECOMMENDED ACTION**" with specific instruction
-3. **SIGNAL INFO**: Direction, confidence, price in bullet format
-4. **TECHNICAL ANALYSIS**: "🔍 **TECHNICAL ANALYSIS**" section explaining the WHY
-5. **RISK WARNING**: Clear timeframe and risk information
-
-Example format:
-🚀 **$TOKEN_SYMBOL**
+🚨🚨🚨 **{tokenSymbol}** 🚨🚨🚨
+💰 **TRADING SIGNAL ALERT** 💰
 
 📋 **RECOMMENDED ACTION**: [BUY NOW / SELL POSITION / HOLD AND MONITOR]
 
-📊 **Signal**: [Signal Type]
-📈 **Direction**: [Direction]
-💰 **Price**: $[Price]
-⚡ **Confidence**: [Confidence]%
+📊 **SIGNAL DETAILS**
+• **Type**: [Signal Type]
+• **Direction**: [Direction]
+• **Price**: $[Price]
+• **Confidence**: [Confidence]%
 
 🔍 **TECHNICAL ANALYSIS**
 [Detailed explanation of technical indicators and why they support this action]
@@ -218,6 +221,8 @@ Example format:
 • **Risk Level**: [Risk Level]
 • **Timeframe**: [Timeframe]
 • **Note**: [Risk warning]
+
+💡 *Always DYOR (Do Your Own Research) before making trading decisions*
 
 Provide the formatted signal with:
 - level: 1 | 2 | 3

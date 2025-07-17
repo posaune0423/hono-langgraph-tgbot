@@ -69,6 +69,11 @@ export const signalGraphState = Annotation.Root({
     message: string;
     priority: "LOW" | "MEDIUM" | "HIGH";
     tags: string[];
+    buttons?: Array<{
+      text: string;
+      url?: string;
+      callback_data?: string;
+    }>;
   }>({
     reducer: (x, y) => y ?? x,
   }),

@@ -1,9 +1,10 @@
 import { desc, eq } from "drizzle-orm";
 import { OHLCV_RETENTION } from "./constants/database";
 import { tokenOHLCV } from "./db";
+import { createPhantomButtons } from "./lib/phantom";
 import { calculateTechnicalIndicators, convertTAtoDbFormat, type OHLCVData } from "./lib/ta";
 import { getTACache } from "./lib/ta-cache";
-import { broadcastToUsers } from "./lib/telegram/utils";
+import { sendMessage } from "./lib/telegram/utils";
 import { fetchMultipleTokenOHLCV } from "./lib/vybe";
 import {
   batchUpsert,
@@ -13,6 +14,7 @@ import {
   getRecentSignals,
   getTokenOHLCV,
   getTokens,
+  getTokenSymbol,
   getUnprocessedTechnicalAnalyses,
   getUsersHoldingToken,
   markTechnicalAnalysisAsProcessed,
@@ -243,6 +245,7 @@ const processTokenSignal = async (analysis: any) => {
       tags: result.finalSignal.tags,
       technicalAnalysisId: analysis.id,
       staticFilterResult: result.staticFilterResult,
+      buttons: result.finalSignal.buttons || [],
     },
   });
 
@@ -333,9 +336,25 @@ const sendSignalToTelegram = async () => {
 
         logger.info(`Sending signal ${signalData.id} to ${holdingUsers.length} users holding token`);
 
-        const result = await broadcastToUsers(holdingUsers, signalData.body, {
-          parse_mode: "Markdown",
-        });
+        // Extract buttons from signal value or generate new ones
+
+        let buttons: { text: string; url: string }[] = [];
+
+        // Get token symbol for button generation (if buttons are empty, regenerate them)
+        if (buttons.length === 0) {
+          const tokenSymbol = await getTokenSymbol(signalData.token);
+
+          buttons = createPhantomButtons(signalData.token, tokenSymbol || undefined);
+        }
+
+        const result = await sendMessage(
+          holdingUsers.map((u) => u.userId),
+          signalData.body,
+          {
+            parse_mode: "Markdown",
+            buttons,
+          },
+        );
 
         if (!result.isOk()) {
           logger.error(`Failed to broadcast signal ${signalData.id}`, {
