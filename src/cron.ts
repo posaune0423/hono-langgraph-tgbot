@@ -1,9 +1,8 @@
 import { OHLCV_RETENTION } from "./constants/database";
-import { tokenOHLCV, type User } from "./db";
+import { tokenOHLCV } from "./db";
 import { calculateTechnicalIndicators, convertTAtoDbFormat, type OHLCVData } from "./lib/ta";
 import { getTACache } from "./lib/ta-cache";
-import { getBotInstance } from "./lib/telegram/bot";
-import { broadcastToAllUsers } from "./lib/telegram/utils";
+import { broadcastToUsers } from "./lib/telegram/utils";
 import { fetchMultipleTokenOHLCV } from "./lib/vybe";
 import {
   batchUpsert,
@@ -22,7 +21,8 @@ import { logger } from "./utils/logger";
 
 // every 5 minutes
 export const runCronTasks = async () => {
-  logger.info(`cron start: ${new Date().toISOString()}`);
+  const start = new Date();
+  logger.info(`cron start: ${start.toISOString()}`);
 
   // 1. トークンのOHLCVデータを更新
   await updateTokenOHLCVTask();
@@ -34,13 +34,10 @@ export const runCronTasks = async () => {
   await generateSignalTask();
 
   // 4. シグナルをTelegramに送信
-  // await sendSignalToTelegram();
-
-  // TODO: 4の代わりに一旦test
-  await broadcastToAllUsers("test");
+  await sendSignalToTelegram();
 
   // 1時間おきにクリーンアップを実行（5分間隔のcronが12回実行されるごと）
-  if (new Date().getMinutes() === 0) {
+  if (start.getMinutes() === 0) {
     await cleanupOHLCVTask();
 
     // 1時間おきにユーザーのトークン保有状況を同期
@@ -332,32 +329,46 @@ const sendSignalToTelegram = async () => {
           continue;
         }
 
-        const bot = getBotInstance();
-        const message = signalData.body; // 既にformatされたメッセージをそのまま使用
+        logger.info(`Sending signal ${signalData.id} to ${holdingUsers.length} users holding token`);
 
-        // 並列でメッセージを送信
-        const sendPromises = holdingUsers.map(async (user: User) => {
-          try {
-            await bot.api.sendMessage(user.userId, message, {
-              parse_mode: "Markdown",
-            });
-            return { success: true, userId: user.userId };
-          } catch (error) {
-            logger.error(`Failed to send to user ${user.userId}:`, error);
-            return { success: false, userId: user.userId };
-          }
+        const result = await broadcastToUsers(holdingUsers, signalData.body, {
+          parse_mode: "Markdown",
         });
 
-        const results = await Promise.allSettled(sendPromises);
-        const successCount = results.filter((result) => result.status === "fulfilled" && result.value.success).length;
+        if (result.isOk()) {
+          const stats = result.value;
+          logger.info(`Signal ${signalData.id} broadcast completed`, {
+            signalId: signalData.id,
+            tokenAddress: signalData.token,
+            totalUsers: stats.totalUsers,
+            successCount: stats.successCount,
+            failureCount: stats.failureCount,
+            successRate: stats.totalUsers > 0 ? ((stats.successCount / stats.totalUsers) * 100).toFixed(1) + "%" : "0%",
+          });
 
-        logger.info(`Signal ${signalData.id} sent to ${successCount}/${holdingUsers.length} users`);
+          if (stats.failureCount > 0) {
+            logger.warn(`Signal ${signalData.id} had some delivery failures`, {
+              failedUserIds: stats.failedUsers,
+            });
+          }
+        } else {
+          logger.error(`Failed to broadcast signal ${signalData.id}`, {
+            error: result.error,
+            signalId: signalData.id,
+            tokenAddress: signalData.token,
+          });
+        }
       } catch (error) {
-        logger.error(`Error processing signal ${signalData.id}:`, error);
+        logger.error(`Error processing signal ${signalData.id}:`, {
+          error: error instanceof Error ? error.message : String(error),
+          signalId: signalData.id,
+        });
       }
     }
   } catch (error) {
-    logger.error("Signal-to-telegram task failed:", error);
+    logger.error("Signal-to-telegram task failed:", {
+      error: error instanceof Error ? error.message : String(error),
+    });
   }
 };
 

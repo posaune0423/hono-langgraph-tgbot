@@ -10,6 +10,7 @@
     "db:studio": "dotenvx run -f .dev.vars -- drizzle-kit studio",
     "db:seed": "bun --env-file=.dev.vars run scripts/seed.ts",
     "cron:run": "bun --env-file=.dev.vars run scripts/run-cron.ts",
+    "broadcast": "bun --env-file=.dev.vars run scripts/test-broadcast.ts",
     "build": "tsup src/**/*.ts --dts --format esm",
     "format": "prettier --write .",
     "test": "dotenvx run -f .dev.vars -- vitest run",
