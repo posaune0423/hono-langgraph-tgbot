@@ -152,16 +152,21 @@ export const signalFormattingPrompt = new PromptTemplate({
 ## Formatting Guidelines
 
 **Message Structure:**
-1. Eye-catching title with emoji
-2. Key signal information (direction, confidence, risk)
-3. Current price and technical context
-4. Clear reasoning and key factors
-5. Risk warning and timeframe
-6. Professional but engaging tone
+1. **TOKEN NAME PROMINENCE**: Start with large, eye-catching token symbol
+2. **CLEAR ACTION**: Explicitly state what user should do (BUY/SELL/HOLD)
+3. **KEY METRICS**: Direction, confidence, risk level prominently displayed
+4. **TECHNICAL ANALYSIS**: Detailed explanation of why this action is recommended
+5. **RISK WARNING**: Clear timeframe and risk information
+6. **PROFESSIONAL TONE**: Engaging but professional
+
+**User Action Clarity:**
+- Use clear action verbs: "BUY NOW", "SELL POSITION", "HOLD AND MONITOR"
+- Provide specific guidance: entry points, risk levels, timeframes
+- Make recommendations actionable and unambiguous
 
 **Telegram Formatting:**
 - Use *italic* and **bold** for emphasis
-- Include relevant emojis for visual appeal
+- Include relevant emojis for visual appeal (🚀💹📈📉⚠️💰🔍⏰)
 - Keep messages concise but informative
 - Use bullet points for clarity
 - Add appropriate risk warnings
@@ -176,7 +181,7 @@ export const signalFormattingPrompt = new PromptTemplate({
 **Token**: {tokenSymbol}
 **Signal Type**: {signalType}
 **Direction**: {direction}
- **Price**: {currentPrice}
+**Price**: {currentPrice}
 **Confidence**: {confidence}%
 **Risk Level**: {riskLevel}
 **Timeframe**: {timeframe}
@@ -188,16 +193,36 @@ export const signalFormattingPrompt = new PromptTemplate({
 - Reasoning: {reasoning}
 - Key Factors: {keyFactors}
 
-Create a Level 1 Technical Signal message that is:
-- Clear and actionable
-- Appropriately cautious about risks
-- Formatted for Telegram
-- Professional yet engaging
+Create a Level 1 Technical Signal message following this EXACT structure:
+
+1. **TOKEN HEADER**: Large token symbol with relevant emoji
+2. **ACTION SECTION**: Clear "📋 **RECOMMENDED ACTION**" with specific instruction
+3. **SIGNAL INFO**: Direction, confidence, price in bullet format
+4. **TECHNICAL ANALYSIS**: "🔍 **TECHNICAL ANALYSIS**" section explaining the WHY
+5. **RISK WARNING**: Clear timeframe and risk information
+
+Example format:
+🚀 **$TOKEN_SYMBOL**
+
+📋 **RECOMMENDED ACTION**: [BUY NOW / SELL POSITION / HOLD AND MONITOR]
+
+📊 **Signal**: [Signal Type]
+📈 **Direction**: [Direction]
+💰 **Price**: $[Price]
+⚡ **Confidence**: [Confidence]%
+
+🔍 **TECHNICAL ANALYSIS**
+[Detailed explanation of technical indicators and why they support this action]
+
+⚠️ **RISK MANAGEMENT**
+• **Risk Level**: [Risk Level]
+• **Timeframe**: [Timeframe]
+• **Note**: [Risk warning]
 
 Provide the formatted signal with:
 - level: 1 | 2 | 3
-- title: string (concise, with emoji)
-- message: string (full Telegram message)
+- title: string (token symbol with emoji)
+- message: string (full Telegram message following above structure)
 - priority: "LOW" | "MEDIUM" | "HIGH"
 - tags: array of relevant tags`,
 });

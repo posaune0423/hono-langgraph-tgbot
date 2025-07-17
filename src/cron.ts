@@ -37,13 +37,13 @@ export const runCronTasks = async () => {
   // 4. シグナルをTelegramに送信
   await sendSignalToTelegram();
 
+  // 5. ユーザーのトークン保有状況を同期
+  await syncUserTokenHoldingsTask();
+
   // 1時間おきにクリーンアップを実行（5分間隔のcronが12回実行されるごと）
   if (start.getMinutes() === 0) {
     await cleanupOHLCVTask();
   }
-
-  // 5. ユーザーのトークン保有状況を同期
-  await syncUserTokenHoldingsTask();
 
   logger.info(`cron end: ${new Date().toISOString()}`);
 };
@@ -319,15 +319,16 @@ const sendSignalToTelegram = async () => {
       return;
     }
 
-    logger.info(`Processing ${recentSignals.length} recent signals`);
+    logger.info(`Processing ${recentSignals.length} recent signals in parallel`);
 
-    for (const signalData of recentSignals) {
+    // 各シグナルの処理を並列実行
+    const signalPromises = recentSignals.map(async (signalData) => {
       try {
         const holdingUsers = await getUsersHoldingToken(signalData.token);
 
         if (holdingUsers.length === 0) {
           logger.info(`No users holding token, skipping signal ${signalData.id}`);
-          continue;
+          return;
         }
 
         logger.info(`Sending signal ${signalData.id} to ${holdingUsers.length} users holding token`);
@@ -336,27 +337,28 @@ const sendSignalToTelegram = async () => {
           parse_mode: "Markdown",
         });
 
-        if (result.isOk()) {
-          const stats = result.value;
-          logger.info(`Signal ${signalData.id} broadcast completed`, {
-            signalId: signalData.id,
-            tokenAddress: signalData.token,
-            totalUsers: stats.totalUsers,
-            successCount: stats.successCount,
-            failureCount: stats.failureCount,
-            successRate: stats.totalUsers > 0 ? ((stats.successCount / stats.totalUsers) * 100).toFixed(1) + "%" : "0%",
-          });
-
-          if (stats.failureCount > 0) {
-            logger.warn(`Signal ${signalData.id} had some delivery failures`, {
-              failedUserIds: stats.failedUsers,
-            });
-          }
-        } else {
+        if (!result.isOk()) {
           logger.error(`Failed to broadcast signal ${signalData.id}`, {
             error: result.error,
             signalId: signalData.id,
             tokenAddress: signalData.token,
+          });
+          return;
+        }
+
+        const stats = result.value;
+        logger.info(`Signal ${signalData.id} broadcast completed`, {
+          signalId: signalData.id,
+          tokenAddress: signalData.token,
+          totalUsers: stats.totalUsers,
+          successCount: stats.successCount,
+          failureCount: stats.failureCount,
+          successRate: stats.totalUsers > 0 ? ((stats.successCount / stats.totalUsers) * 100).toFixed(1) + "%" : "0%",
+        });
+
+        if (stats.failureCount > 0) {
+          logger.warn(`Signal ${signalData.id} had some delivery failures`, {
+            failedUserIds: stats.failedUsers,
           });
         }
       } catch (error) {
@@ -365,7 +367,12 @@ const sendSignalToTelegram = async () => {
           signalId: signalData.id,
         });
       }
-    }
+    });
+
+    // 全ての処理を並列実行
+    await Promise.allSettled(signalPromises);
+
+    logger.info("Signal-to-telegram task completed");
   } catch (error) {
     logger.error("Signal-to-telegram task failed:", {
       error: error instanceof Error ? error.message : String(error),

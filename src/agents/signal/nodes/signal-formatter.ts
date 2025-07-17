@@ -1,8 +1,8 @@
 import { z } from "zod";
+import { logger } from "../../../utils/logger";
 import type { SignalGraphState } from "../graph-state";
 import { createSignalModel } from "../model";
 import { signalFormattingPrompt } from "../prompts/signal-analysis";
-import { logger } from "../../../utils/logger";
 
 /**
  * Signal Formatting Schema
@@ -22,10 +22,24 @@ const SignalFormattingSchema = z.object({
 const createNoSignalResponse = () => ({
   finalSignal: {
     level: 1 as const,
-    title: "No Signal",
-    message: "No trading signal generated",
+    title: "🔍 Market Monitoring",
+    message: `🔍 **MARKET MONITORING**
+
+📋 **RECOMMENDED ACTION**: HOLD AND MONITOR
+
+📊 **Status**: No clear signal detected
+📈 **Direction**: NEUTRAL
+⚡ **Confidence**: Insufficient data
+
+🔍 **TECHNICAL ANALYSIS**
+Current market conditions do not meet the criteria for generating a trading signal. Technical indicators are either conflicting or showing neutral patterns.
+
+⚠️ **RISK MANAGEMENT**
+• **Risk Level**: LOW
+• **Timeframe**: ONGOING
+• **Note**: Continue monitoring for clearer market direction. No action required at this time.`,
     priority: "LOW" as const,
-    tags: ["no-signal"],
+    tags: ["no-signal", "monitoring"],
   },
 });
 
@@ -35,7 +49,7 @@ const createNoSignalResponse = () => ({
 const createFallbackResponse = (state: SignalGraphState) => ({
   finalSignal: {
     level: 1 as const,
-    title: `Technical Alert: ${state.tokenSymbol}`,
+    title: `🚀 $${state.tokenSymbol}`,
     message: createFallbackMessage(state),
     priority: state.signalDecision!.riskLevel === "HIGH" ? ("HIGH" as const) : ("MEDIUM" as const),
     tags: [state.tokenSymbol.toLowerCase(), state.signalDecision!.signalType.toLowerCase()],
@@ -63,17 +77,41 @@ const formatTechnicalData = (state: SignalGraphState): string => {
 const createFallbackMessage = (state: SignalGraphState): string => {
   const { signalDecision, tokenSymbol, currentPrice } = state;
 
-  return `🔍 **Technical Alert: $${tokenSymbol}**
+  // アクションの決定
+  const getRecommendedAction = (direction: string, riskLevel: string) => {
+    if (direction === "BUY") {
+      return riskLevel === "HIGH" ? "MONITOR CLOSELY - Consider BUY" : "BUY NOW";
+    }
+    if (direction === "SELL") {
+      return riskLevel === "HIGH" ? "SELL POSITION" : "CONSIDER SELLING";
+    }
+    return "HOLD AND MONITOR";
+  };
+
+  const recommendedAction = getRecommendedAction(
+    signalDecision?.direction || "NEUTRAL",
+    signalDecision?.riskLevel || "MEDIUM",
+  );
+
+  return `🚀 **$${tokenSymbol}**
+
+📋 **RECOMMENDED ACTION**: ${recommendedAction}
 
 📊 **Signal**: ${signalDecision?.signalType}
 📈 **Direction**: ${signalDecision?.direction}
 💰 **Price**: $${currentPrice}
 ⚡ **Confidence**: ${Math.round((signalDecision?.confidence || 0) * 100)}%
 
-⚠️ **Risk**: ${signalDecision?.riskLevel}
-⏰ **Timeframe**: ${signalDecision?.timeframe}
+🔍 **TECHNICAL ANALYSIS**
+${signalDecision?.reasoning}
 
-*${signalDecision?.reasoning}*`;
+Key factors supporting this signal:
+${signalDecision?.keyFactors?.map((factor) => `• ${factor}`).join("\n") || "• Technical confluence detected"}
+
+⚠️ **RISK MANAGEMENT**
+• **Risk Level**: ${signalDecision?.riskLevel}
+• **Timeframe**: ${signalDecision?.timeframe}
+• **Note**: This is an automated technical signal. Always do your own research and manage risk accordingly.`;
 };
 
 /**
