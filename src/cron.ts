@@ -3,6 +3,7 @@ import { tokenOHLCV, type User } from "./db";
 import { calculateTechnicalIndicators, convertTAtoDbFormat, type OHLCVData } from "./lib/ta";
 import { getTACache } from "./lib/ta-cache";
 import { getBotInstance } from "./lib/telegram/bot";
+import { broadcastToAllUsers } from "./lib/telegram/utils";
 import { fetchMultipleTokenOHLCV } from "./lib/vybe";
 import {
   batchUpsert,
@@ -33,7 +34,10 @@ export const runCronTasks = async () => {
   await generateSignalTask();
 
   // 4. シグナルをTelegramに送信
-  await sendSignalToTelegram();
+  // await sendSignalToTelegram();
+
+  // TODO: 4の代わりに一旦test
+  await broadcastToAllUsers("test");
 
   // 1時間おきにクリーンアップを実行（5分間隔のcronが12回実行されるごと）
   if (new Date().getMinutes() === 0) {
