@@ -1,5 +1,5 @@
 import { AIMessage, HumanMessage, type BaseMessage } from "@langchain/core/messages";
-import { and, desc, eq, getTableColumns, getTableName, inArray, notInArray, sql } from "drizzle-orm";
+import { and, desc, eq, getTableColumns, getTableName, notInArray, sql } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 import { Result, err, ok } from "neverthrow";
 import { BATCH_PROCESSING, QUERY_LIMITS } from "../constants/database";
@@ -500,16 +500,10 @@ export const updateUserTokenHoldings = async (
       userTokens = await createTokens(tokenData);
     }
 
-    // 現在のユーザーのトークン保有状況を取得
-    const currentHoldings = await db
-      .select({ tokenAddress: userTokenHoldings.tokenAddress })
-      .from(userTokenHoldings)
-      .where(eq(userTokenHoldings.userId, userId));
+    // 既存の保有記録を削除
+    await db.delete(userTokenHoldings).where(eq(userTokenHoldings.userId, userId));
 
-    const currentTokenAddresses = new Set(currentHoldings.map((h) => h.tokenAddress));
-    const newTokenAddresses = new Set(userTokens.map((t) => t.address));
-
-    // 全ての現在保有トークンをupsert（新規追加 + 既存更新）
+    // 新しい保有記録を挿入
     if (userTokens.length > 0) {
       const holdings = userTokens.map((token) => ({
         userId,
@@ -517,44 +511,11 @@ export const updateUserTokenHoldings = async (
         lastVerifiedAt: new Date(),
       }));
 
-      await db
-        .insert(userTokenHoldings)
-        .values(holdings)
-        .onConflictDoUpdate({
-          target: [userTokenHoldings.userId, userTokenHoldings.tokenAddress],
-          set: {
-            lastVerifiedAt: new Date(),
-          },
-        });
-
-      logger.info(`Upserted ${userTokens.length} token holdings for user ${userId}`, {
-        allTokens: userTokens.map((t) => t.symbol),
-      });
+      await db.insert(userTokenHoldings).values(holdings);
     }
 
-    // 保有していないトークンを削除
-    const tokensToRemove = currentHoldings.filter((holding) => !newTokenAddresses.has(holding.tokenAddress));
-    if (tokensToRemove.length > 0) {
-      const tokenAddressesToRemove = tokensToRemove.map((h) => h.tokenAddress);
-      await db
-        .delete(userTokenHoldings)
-        .where(
-          and(eq(userTokenHoldings.userId, userId), inArray(userTokenHoldings.tokenAddress, tokenAddressesToRemove)),
-        );
-
-      logger.info(`Removed ${tokensToRemove.length} token holdings for user ${userId}`, {
-        removedTokens: tokenAddressesToRemove,
-      });
-    }
-
-    const tokensAdded = userTokens.filter((token) => !currentTokenAddresses.has(token.address)).length;
-    const tokensUpdated = userTokens.filter((token) => currentTokenAddresses.has(token.address)).length;
-
-    logger.info(`Successfully synced token holdings for user ${userId}`, {
-      totalCurrentTokens: userTokens.length,
-      tokensAdded,
-      tokensUpdated,
-      tokensRemoved: tokensToRemove.length,
+    logger.info(`Updated token holdings for user ${userId}`, {
+      tokenCount: userTokens.length,
       walletAddress,
     });
   } catch (error) {
@@ -1108,13 +1069,6 @@ async function processBatchUserSync(
 }
 
 /**
- * API Rate Limitingのための遅延処理
- */
-async function delayBetweenBatches(delayMs: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, delayMs));
-}
-
-/**
  * 全ユーザーのトークン保有状況を同期する
  *
  * @param options - 同期オプション
@@ -1160,7 +1114,7 @@ export const syncAllUserTokenHoldings = async (
     // 最後のバッチ以外では遅延を挟む
     if (i < batches.length - 1) {
       logger.debug(`Waiting ${delayMs}ms before next batch...`);
-      await delayBetweenBatches(delayMs);
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
     }
   }
 

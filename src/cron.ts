@@ -1,3 +1,4 @@
+import { desc, eq } from "drizzle-orm";
 import { OHLCV_RETENTION } from "./constants/database";
 import { tokenOHLCV } from "./db";
 import { calculateTechnicalIndicators, convertTAtoDbFormat, type OHLCVData } from "./lib/ta";
@@ -42,7 +43,7 @@ export const runCronTasks = async () => {
   }
 
   // 5. ユーザーのトークン保有状況を同期
-  // await syncUserTokenHoldingsTask();
+  await syncUserTokenHoldingsTask();
 
   logger.info(`cron end: ${new Date().toISOString()}`);
 };
@@ -181,8 +182,8 @@ const technicalAnalysisTask = async () => {
  */
 const processTokenSignal = async (analysis: any) => {
   // トークン情報を取得
-  const { tokens, tokenOHLCV, signal, getDB } = await import("./db");
-  const { eq, desc } = await import("drizzle-orm");
+  const { tokens, tokenOHLCV, getDB } = await import("./db");
+
   const db = getDB();
 
   const tokenInfo = await db.select().from(tokens).where(eq(tokens.address, analysis.token)).limit(1);
