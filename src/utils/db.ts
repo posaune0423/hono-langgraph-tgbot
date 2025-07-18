@@ -1,5 +1,5 @@
 import { AIMessage, HumanMessage, type BaseMessage } from "@langchain/core/messages";
-import { and, desc, eq, getTableColumns, getTableName, notInArray, sql } from "drizzle-orm";
+import { and, desc, eq, getTableColumns, getTableName, inArray, notInArray, sql } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 import { Result, err, ok } from "neverthrow";
 import { BATCH_PROCESSING, QUERY_LIMITS } from "../constants/database";
@@ -53,7 +53,16 @@ export const createTokens = async (newTokens: NewToken[]): Promise<Token[]> => {
     (token, index, array) => array.findIndex((t) => t.symbol === token.symbol) === index,
   );
 
-  return await db.insert(tokens).values(uniqueTokens).onConflictDoNothing({ target: tokens.address }).returning();
+  if (uniqueTokens.length === 0) {
+    return [];
+  }
+
+  // Insert new tokens (only newly inserted ones are returned)
+  await db.insert(tokens).values(uniqueTokens).onConflictDoNothing({ target: tokens.address });
+
+  // Return all requested tokens (including existing ones)
+  const allTokenAddresses = uniqueTokens.map((t) => t.address);
+  return await db.select().from(tokens).where(inArray(tokens.address, allTokenAddresses));
 };
 
 export const getUsers = async (): Promise<User[]> => {
@@ -487,7 +496,8 @@ export const updateUserTokenHoldings = async (
       const assets = await getAssetsByOwner(walletAddress);
 
       if (assets.length === 0) {
-        logger.info(`No assets found for user ${userId} wallet ${walletAddress}`);
+        logger.info(`No assets found for user ${userId} wallet ${walletAddress}, preserving existing holdings`);
+        return; // Don't update holdings if no assets found - preserve existing data
       }
 
       // Fungible tokenのみを抽出してToken形式に変換
@@ -504,18 +514,22 @@ export const updateUserTokenHoldings = async (
         }));
 
       if (tokenData.length === 0) {
-        logger.info(`No fungible tokens found for user ${userId} after filtering ${assets.length} assets`);
+        logger.info(
+          `No fungible tokens found for user ${userId} after filtering ${assets.length} assets, preserving existing holdings`,
+        );
+        return; // Don't update holdings if no fungible tokens found - preserve existing data
       }
 
       // tokensテーブルにトークンを作成（外部キー制約のため）
       userTokens = await createTokens(tokenData);
 
       if (userTokens.length === 0) {
-        logger.info(`No tokens created/found in database for user ${userId}`);
+        logger.warn(`No tokens created/found in database for user ${userId}, preserving existing holdings`);
+        return; // Don't update holdings if no tokens could be created - preserve existing data
       }
     }
 
-    // 新しいトークンがある場合のみ、既存レコードを更新
+    // Only update if we have valid tokens
     if (userTokens.length > 0) {
       // 既存の保有記録を削除
       await db.delete(userTokenHoldings).where(eq(userTokenHoldings.userId, userId));
@@ -528,14 +542,12 @@ export const updateUserTokenHoldings = async (
       }));
 
       await db.insert(userTokenHoldings).values(holdings);
-    } else {
-      logger.info(`Skipping token holdings update for user ${userId} - no tokens to update`);
-    }
 
-    logger.info(`Updated token holdings for user ${userId}`, {
-      tokenCount: userTokens.length,
-      walletAddress,
-    });
+      logger.info(`Updated token holdings for user ${userId}`, {
+        tokenCount: userTokens.length,
+        walletAddress,
+      });
+    }
   } catch (error) {
     logger.error(`Failed to update token holdings for user ${userId}`, {
       walletAddress,
