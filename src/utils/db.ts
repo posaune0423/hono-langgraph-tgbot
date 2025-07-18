@@ -38,31 +38,56 @@ export const getTokens = async (): Promise<Token[]> => {
 export const createTokens = async (newTokens: NewToken[]): Promise<Token[]> => {
   const db = getDB();
 
+  logger.info(`createTokens: Processing ${newTokens.length} tokens`);
+
   const validatedTokens = newTokens
     .map((token) => ({
       address: token.address || "",
-      name: token.name || "",
-      symbol: token.symbol?.trim(),
-      decimals: token.decimals ?? 0,
+      name: token.name || token.symbol || "Unknown Token", // Fallback to symbol if name is missing
+      symbol: token.symbol?.trim() || `TOKEN_${token.address?.substring(0, 8)}`, // Fallback symbol
+      decimals: token.decimals ?? 9, // Default to 9 decimals for Solana tokens
       iconUrl: token.iconUrl || "",
     }))
-    .filter((token) => token.address && token.name);
+    .filter((token) => {
+      const isValid = token.address && token.address.length > 0;
+      if (!isValid) {
+        logger.warn(`createTokens: Filtering out invalid token`, { token });
+      }
+      return isValid;
+    });
 
-  // 重複するsymbolを除去
+  logger.info(`createTokens: After validation: ${validatedTokens.length} tokens`);
+
+  // 重複するaddressを除去（symbolではなくaddressで重複チェック）
   const uniqueTokens = validatedTokens.filter(
-    (token, index, array) => array.findIndex((t) => t.symbol === token.symbol) === index,
+    (token, index, array) => array.findIndex((t) => t.address === token.address) === index,
   );
 
+  logger.info(`createTokens: After deduplication: ${uniqueTokens.length} tokens`);
+
   if (uniqueTokens.length === 0) {
+    logger.warn("createTokens: No valid tokens to process");
     return [];
   }
 
-  // Insert new tokens (only newly inserted ones are returned)
-  await db.insert(tokens).values(uniqueTokens).onConflictDoNothing({ target: tokens.address });
+  try {
+    // Insert new tokens (only newly inserted ones are returned)
+    await db.insert(tokens).values(uniqueTokens).onConflictDoNothing({ target: tokens.address });
 
-  // Return all requested tokens (including existing ones)
-  const allTokenAddresses = uniqueTokens.map((t) => t.address);
-  return await db.select().from(tokens).where(inArray(tokens.address, allTokenAddresses));
+    // Return all requested tokens (including existing ones)
+    const allTokenAddresses = uniqueTokens.map((t) => t.address);
+    const result = await db.select().from(tokens).where(inArray(tokens.address, allTokenAddresses));
+
+    logger.info(`createTokens: Successfully processed ${result.length} tokens`);
+    return result;
+  } catch (error) {
+    logger.error("createTokens: Database operation failed", {
+      error: error instanceof Error ? error.message : String(error),
+      tokensCount: uniqueTokens.length,
+      sampleTokens: uniqueTokens.slice(0, 3), // Log first 3 tokens for debugging
+    });
+    throw error;
+  }
 };
 
 export const getUsers = async (): Promise<User[]> => {
@@ -485,6 +510,8 @@ export const updateUserTokenHoldings = async (
   try {
     const db = getDB();
 
+    logger.info(`updateUserTokenHoldings: Starting update for user ${userId}`);
+
     // tokensが提供されていない場合は、HeliusAPIから取得
     let userTokens = tokens;
     if (!userTokens) {
@@ -493,6 +520,7 @@ export const updateUserTokenHoldings = async (
         return;
       }
 
+      logger.info(`updateUserTokenHoldings: Fetching assets for user ${userId}`);
       const assets = await getAssetsByOwner(walletAddress);
 
       if (assets.length === 0) {
@@ -514,11 +542,11 @@ export const updateUserTokenHoldings = async (
         }));
 
       if (tokenData.length === 0) {
-        logger.info(
-          `No fungible tokens found for user ${userId} after filtering ${assets.length} assets, preserving existing holdings`,
-        );
+        logger.info(`No fungible tokens found for user ${userId} after filtering ${assets.length} assets, preserving existing holdings`);
         return; // Don't update holdings if no fungible tokens found - preserve existing data
       }
+
+      logger.info(`updateUserTokenHoldings: Creating ${tokenData.length} tokens for user ${userId}`);
 
       // tokensテーブルにトークンを作成（外部キー制約のため）
       userTokens = await createTokens(tokenData);
@@ -531,27 +559,57 @@ export const updateUserTokenHoldings = async (
 
     // Only update if we have valid tokens
     if (userTokens.length > 0) {
-      // 既存の保有記録を削除
-      await db.delete(userTokenHoldings).where(eq(userTokenHoldings.userId, userId));
+      logger.info(`updateUserTokenHoldings: Updating holdings for user ${userId} with ${userTokens.length} tokens`);
 
-      // 新しい保有記録を挿入
-      const holdings = userTokens.map((token) => ({
-        userId,
-        tokenAddress: token.address,
-        lastVerifiedAt: new Date(),
-      }));
+      // Validate that all tokens exist in the database before proceeding
+      const tokenAddresses = userTokens.map(t => t.address);
+      const { tokens: tokensTable } = schema;
+      const existingTokens = await db.select({ address: tokensTable.address }).from(tokensTable).where(inArray(tokensTable.address, tokenAddresses));
+      const existingAddresses = new Set(existingTokens.map(t => t.address));
 
-      await db.insert(userTokenHoldings).values(holdings);
+      const missingTokens = tokenAddresses.filter(addr => !existingAddresses.has(addr));
+      if (missingTokens.length > 0) {
+        logger.error(`updateUserTokenHoldings: Foreign key constraint would be violated - missing tokens in database`, {
+          userId,
+          missingTokens,
+          totalTokens: tokenAddresses.length,
+        });
+        throw new Error(`Cannot update holdings: ${missingTokens.length} tokens not found in database`);
+      }
 
-      logger.info(`Updated token holdings for user ${userId}`, {
-        tokenCount: userTokens.length,
-        walletAddress,
-      });
+      try {
+        // 既存の保有記録を削除
+        await db.delete(userTokenHoldings).where(eq(userTokenHoldings.userId, userId));
+
+        // 新しい保有記録を挿入
+        const holdings = userTokens.map((token) => ({
+          userId,
+          tokenAddress: token.address,
+          lastVerifiedAt: new Date(),
+        }));
+
+        await db.insert(userTokenHoldings).values(holdings);
+
+        logger.info(`Updated token holdings for user ${userId}`, {
+          tokenCount: userTokens.length,
+          walletAddress,
+        });
+      } catch (insertError) {
+        logger.error(`updateUserTokenHoldings: Failed to insert holdings for user ${userId}`, {
+          error: insertError instanceof Error ? insertError.message : String(insertError),
+          tokensCount: userTokens.length,
+          sampleTokens: userTokens.slice(0, 3).map(t => ({ address: t.address, symbol: t.symbol })),
+        });
+        throw insertError;
+      }
+    } else {
+      logger.warn(`updateUserTokenHoldings: No tokens provided for user ${userId}, skipping update`);
     }
   } catch (error) {
     logger.error(`Failed to update token holdings for user ${userId}`, {
       walletAddress,
       error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
     });
     throw error;
   }
