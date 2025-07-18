@@ -1,4 +1,4 @@
-import { pgTable, text, integer, index, unique } from "drizzle-orm/pg-core";
+import { index, integer, pgTable, text, unique } from "drizzle-orm/pg-core";
 
 /**
  * トークンテーブル - 取引可能なトークンの基本情報
@@ -37,4 +37,3 @@ export type UpdateToken = Partial<Omit<NewToken, "address">>;
  * Relations定義は循環参照を避けるため、
  * 別のファイルまたは後で定義する必要があります
  */
-// TODO: Relations定義をindex.tsまたは別のファイルで行う

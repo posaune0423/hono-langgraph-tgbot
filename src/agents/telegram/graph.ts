@@ -1,10 +1,11 @@
 import { END, START, StateGraph } from "@langchain/langgraph";
+import { logger } from "../../utils/logger";
+import { managerRouter } from "./graph-route";
 import { graphState } from "./graph-state";
+import { analyzerNode } from "./nodes/analyzer";
+import { dataFetchNode } from "./nodes/data-fetch";
 import { generalistNode } from "./nodes/general";
 import { managerNode } from "./nodes/manager";
-import { analyzerNode } from "./nodes/analyzer";
-import { managerRouter } from "./graph-route";
-import { dataFetchNode } from "./nodes/data-fetch";
 
 export async function initTelegramGraph(userId: string) {
   try {
@@ -27,7 +28,7 @@ export async function initTelegramGraph(userId: string) {
 
     return { agent: graph, config };
   } catch (error) {
-    console.error("Failed to initialize agent:", error);
+    logger.error("Failed to initialize agent:", error);
     throw error;
   }
 }

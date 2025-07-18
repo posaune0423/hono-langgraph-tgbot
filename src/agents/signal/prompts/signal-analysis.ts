@@ -75,12 +75,12 @@ Based on this comprehensive technical analysis, determine if a trading signal sh
 Provide your analysis in the following structured format:
 - shouldGenerateSignal: boolean
 - signalType: string (specific signal type from candidates)
-- direction: "BUY" | "SELL" | "NEUTRAL"
+- direction: BUY or SELL or NEUTRAL
 - confidence: number (0-1, minimum 0.6 for signal generation)
 - reasoning: string (detailed explanation)
 - keyFactors: array of up to 3 most important factors
-- riskLevel: "LOW" | "MEDIUM" | "HIGH"
-- timeframe: "SHORT" | "MEDIUM" | "LONG"`,
+- riskLevel: LOW or MEDIUM or HIGH
+- timeframe: SHORT or MEDIUM or LONG`,
 });
 
 /**
@@ -127,7 +127,7 @@ Analyze the external evidence and provide:
 - relevantSources: array of most relevant data points
 - overallConfidence: number (0-1)
 - primaryCause: string (main driving factor if identified)
-- recommendation: "INCLUDE" | "EXCLUDE" | "UNCERTAIN"`,
+- recommendation: INCLUDE or EXCLUDE or UNCERTAIN`,
 });
 
 /**
@@ -148,91 +148,20 @@ export const signalFormattingPrompt = new PromptTemplate({
     "keyFactors",
     "technicalData",
   ],
-  template: `You are a crypto trading signal formatter. Create clear, actionable Telegram messages for traders.
+  template: `You are a crypto trading signal formatter. Create clear Telegram messages.
 
-## Formatting Guidelines
+Token: {tokenSymbol}
+Address: {tokenAddress}
+Signal Type: {signalType}
+Direction: {direction}
+Price: {currentPrice}
+Confidence: {confidence}
+Risk Level: {riskLevel}
+Timeframe: {timeframe}
 
-**Message Structure:**
-1. **LARGE TOKEN HEADER**: Start with VERY large, eye-catching token symbol using multiple emojis
-2. **CLEAR ACTION**: Explicitly state what user should do (BUY/SELL/HOLD)
-3. **KEY METRICS**: Direction, confidence, risk level prominently displayed
-4. **TECHNICAL ANALYSIS**: Detailed explanation of why this action is recommended
-5. **CHART ACCESS**: Include direct link to view charts
-6. **RISK WARNING**: Clear timeframe and risk information
-7. **PROFESSIONAL TONE**: Engaging but professional
+Technical Data: {technicalData}
+Reasoning: {reasoning}
+Key Factors: {keyFactors}
 
-**User Action Clarity:**
-- Use clear action verbs: "BUY NOW", "SELL POSITION", "HOLD AND MONITOR"
-- Provide specific guidance: entry points, risk levels, timeframes
-- Make recommendations actionable and unambiguous
-
-**Telegram Formatting:**
-- Use *italic* and **bold** for emphasis
-- Include relevant emojis for visual appeal (🚀💹📈📉⚠️💰🔍⏰📊💎🎯🔥)
-- Keep messages concise but informative
-- Use bullet points for clarity
-- Add appropriate risk warnings
-- Make token symbol EXTREMELY PROMINENT with large emojis
-
-**Chart Integration:**
-- Always include DEXScreener chart link for token analysis
-- Format: https://dexscreener.com/solana/{tokenAddress}
-
-**Signal Levels:**
-- Level 1: Technical signals only (basic TA confluence)
-- Level 2: Technical + supporting evidence
-- Level 3: High-confidence signals with strong evidence
-
-## Signal Data
-
-**Token**: {tokenSymbol}
-**Token Address**: {tokenAddress}
-**Signal Type**: {signalType}
-**Direction**: {direction}
-**Price**: {currentPrice}
-**Confidence**: {confidence}%
-**Risk Level**: {riskLevel}
-**Timeframe**: {timeframe}
-
-**Technical Context**:
-{technicalData}
-
-**Analysis**:
-- Reasoning: {reasoning}
-- Key Factors: {keyFactors}
-
-Create a Level 1 Technical Signal message following this EXACT structure:
-
-🚨🚨🚨 **{tokenSymbol}** 🚨🚨🚨
-💰 **TRADING SIGNAL ALERT** 💰
-
-📋 **RECOMMENDED ACTION**: [BUY NOW / SELL POSITION / HOLD AND MONITOR]
-
-📊 **SIGNAL DETAILS**
-• **Type**: [Signal Type]
-• **Direction**: [Direction]
-• **Price**: $[Price]
-• **Confidence**: [Confidence]%
-
-🔍 **TECHNICAL ANALYSIS**
-[Detailed explanation of technical indicators and why they support this action]
-
-⚠️ **RISK MANAGEMENT**
-• **Risk Level**: [Risk Level]
-• **Timeframe**: [Timeframe]
-• **Note**: [Risk warning]
-
-💡 *Always DYOR (Do Your Own Research) before making trading decisions*
-
-Provide the formatted signal with:
-- level: 1 | 2 | 3
-- title: string (token symbol with emoji)
-- message: string (full Telegram message following above structure)
-- priority: "LOW" | "MEDIUM" | "HIGH"
-- tags: array of relevant tags`,
+Create a formatted signal message with level, title, message, priority, and tags.`,
 });
-
-// Legacy exports for backward compatibility
-export const SIGNAL_ANALYSIS_PROMPT = signalAnalysisPrompt.template;
-export const EVIDENCE_EVALUATION_PROMPT = evidenceEvaluationPrompt.template;
-export const SIGNAL_FORMATTING_PROMPT = signalFormattingPrompt.template;

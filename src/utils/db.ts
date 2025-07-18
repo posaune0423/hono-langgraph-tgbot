@@ -904,7 +904,7 @@ function aggregateResults(batchResults: BatchResult[], totalBatches: number, tab
  *   updateFields: ["vwap", "rsi", "signalGenerated"]
  * });
  *
- * console.log(`Successfully processed ${result.totalUpserted} records`);
+ * logger.info(`Successfully processed ${result.totalUpserted} records`);
  * ```
  */
 export async function batchUpsert<TTable extends PgTable, TData extends Record<string, any>>(

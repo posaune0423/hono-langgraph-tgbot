@@ -214,6 +214,13 @@ const processTokenSignal = async (analysis: any) => {
 
   // Signal Generator実行
   const { generateSignal } = await import("./agents/signal/graph");
+
+  logger.info("Starting signal generation for token", {
+    tokenAddress: analysis.token,
+    tokenSymbol: token.symbol,
+    currentPrice,
+  });
+
   const result = await generateSignal({
     tokenAddress: analysis.token,
     tokenSymbol: token.symbol,
@@ -223,6 +230,13 @@ const processTokenSignal = async (analysis: any) => {
 
   // シグナルが生成されなかった場合は早期リターン
   if (!result.finalSignal || result.finalSignal.level < 1) {
+    logger.info("No signal generated for token", {
+      tokenAddress: analysis.token,
+      tokenSymbol: token.symbol,
+      hasResult: !!result,
+      hasFinalSignal: !!result.finalSignal,
+      signalLevel: result.finalSignal?.level,
+    });
     return null;
   }
 
@@ -351,7 +365,7 @@ const sendSignalToTelegram = async () => {
           holdingUsers.map((u) => u.userId),
           signalData.body,
           {
-            parse_mode: "Markdown",
+            parse_mode: "MarkdownV2",
             buttons,
           },
         );

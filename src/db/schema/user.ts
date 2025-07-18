@@ -1,4 +1,4 @@
-import { pgTable, text, integer, timestamp, json, boolean, index } from "drizzle-orm/pg-core";
+import { boolean, index, integer, json, pgTable, text, timestamp } from "drizzle-orm/pg-core";
 
 /**
  * ユーザーテーブル - Telegramユーザーのプロフィール情報
@@ -52,7 +52,6 @@ export const users = pgTable(
  * Relations定義は循環参照を避けるため、
  * 別のファイルまたは後で定義する必要があります
  */
-// TODO: Relations定義をindex.tsまたは別のファイルで行う
 
 /**
  * 型定義（Drizzle推奨の型推論を活用）
