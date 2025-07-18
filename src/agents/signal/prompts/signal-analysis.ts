@@ -7,6 +7,8 @@ import { PromptTemplate } from "@langchain/core/prompts";
  * - LLM分析用プロンプト
  * - エビデンス評価用プロンプト
  * - シグナルフォーマット用プロンプト
+ *
+ * Note: Token symbols should always be displayed with $ prefix and in uppercase (e.g., $BTC, $ETH)
  */
 
 /**
@@ -52,7 +54,7 @@ export const signalAnalysisPrompt = new PromptTemplate({
 
 ## Current Market Analysis
 
-**Token**: {tokenSymbol} ({tokenAddress})
+**Token**: {tokenSymbol} ({tokenAddress}) (Display token symbol with $ prefix and uppercase)
 **Current Price**: {currentPrice}
 **Analysis Time**: {timestamp}
 
@@ -105,7 +107,7 @@ export const evidenceEvaluationPrompt = new PromptTemplate({
 ## Evaluation Task
 
 **Technical Signal Context:**
-- Token: {tokenSymbol}
+- Token: {tokenSymbol} (Display with $ prefix and uppercase)
 - Signal Type: {signalType}
 - Direction: {direction}
 - Technical Reasoning: {technicalReasoning}
@@ -164,7 +166,7 @@ export const signalFormattingPrompt = new PromptTemplate({
   template: `You are a crypto trading signal formatter specializing in beginner-friendly explanations. Create clear, easy-to-understand Telegram messages that explain the market situation and trading recommendations without requiring technical analysis knowledge.
 
 ## Input Data
-Token: {tokenSymbol}
+Token: {tokenSymbol} (Always display with $ prefix and uppercase)
 Address: {tokenAddress}
 Signal Type: {signalType}
 Direction: {direction}
@@ -212,7 +214,7 @@ Create a formatted signal message with:
 
 ## Message Structure:
 
-Title: Should be catchy and informative (e.g., "🚀 [TOKEN] Breaking Upward Momentum" or "⚠️ [TOKEN] Showing Weakness")
+Title: Should be catchy and informative (e.g., "🚀 [$TOKEN] Breaking Upward Momentum" or "⚠️ [$TOKEN] Showing Weakness")
 
 Message should include:
 1. **Current Situation**: What's happening with the token right now
@@ -242,7 +244,7 @@ Message should include:
 
 **Message Structure Template:**
 
-[EMOJI] **[TOKEN SYMBOL] - [Signal Type]** [EMOJI]
+[EMOJI] **[$TOKEN_SYMBOL] - [Signal Type]** [EMOJI]
 
 🎯 **RECOMMENDED ACTION**: [Clear Action]
 💰 **Current Price**: $[Price]
