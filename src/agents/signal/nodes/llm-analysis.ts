@@ -1,8 +1,8 @@
 import { z } from "zod";
+import { logger } from "../../../utils/logger";
 import type { SignalGraphState } from "../graph-state";
 import { createSignalModel } from "../model";
 import { signalAnalysisPrompt } from "../prompts/signal-analysis";
-import { logger } from "../../../utils/logger";
 
 /**
  * LLM Signal Analysis Schema
@@ -17,6 +17,8 @@ const SignalAnalysisSchema = z.object({
   keyFactors: z.array(z.string()).max(3),
   riskLevel: z.enum(["LOW", "MEDIUM", "HIGH"]),
   timeframe: z.enum(["SHORT", "MEDIUM", "LONG"]),
+  marketSentiment: z.string(),
+  priceExpectation: z.string(),
 });
 
 /**
@@ -32,6 +34,8 @@ const createRejectedSignalResponse = (state: SignalGraphState) => ({
     keyFactors: [],
     riskLevel: "LOW" as const,
     timeframe: "SHORT" as const,
+    marketSentiment: "Neutral - not enough market consensus",
+    priceExpectation: "Price likely to continue current range without clear catalyst",
   },
 });
 
@@ -48,6 +52,8 @@ const createFallbackSignalResponse = (state: SignalGraphState) => ({
     keyFactors: state.staticFilterResult!.triggeredIndicators.slice(0, 3),
     riskLevel: state.staticFilterResult!.riskLevel,
     timeframe: "SHORT" as const,
+    marketSentiment: "Mixed signals from technical indicators",
+    priceExpectation: "Price movement uncertain, monitor key levels closely",
   },
 });
 

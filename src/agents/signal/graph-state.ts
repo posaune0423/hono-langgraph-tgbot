@@ -48,6 +48,8 @@ export const signalGraphState = Annotation.Root({
     keyFactors: string[];
     riskLevel: "LOW" | "MEDIUM" | "HIGH";
     timeframe: "SHORT" | "MEDIUM" | "LONG";
+    marketSentiment: string; // Overall market mood for this token
+    priceExpectation: string; // What might happen to price and why
   }>({
     reducer: (x, y) => y ?? x,
   }),

@@ -11,7 +11,7 @@ import { PromptTemplate } from "@langchain/core/prompts";
 
 /**
  * LLM Signal Analysis Prompt
- * テクニカル指標の複合分析によるシグナル生成判定
+ * テクニカル指標の複合分析によるシグナル生成判定（初心者向け解釈付き）
  */
 export const signalAnalysisPrompt = new PromptTemplate({
   inputVariables: [
@@ -30,57 +30,68 @@ export const signalAnalysisPrompt = new PromptTemplate({
     "confluenceScore",
     "riskLevel",
   ],
-  template: `You are a professional crypto trading signal analyst. Your task is to analyze technical indicators and determine if a trading signal should be generated.
+  template: `You are a professional crypto trading signal analyst who specializes in translating complex technical analysis into beginner-friendly insights. Your task is to analyze technical indicators and determine if a trading signal should be generated, while explaining the market situation in simple terms.
 
 ## Analysis Guidelines
 
 **Signal Generation Criteria:**
-- Multiple indicators must align (confluence)
-- Risk-reward ratio must be favorable
-- Market conditions must support the signal direction
-- Confidence level must be above 60%
+- Multiple market indicators must align (market consensus)
+- Risk-reward ratio must be favorable (potential profit vs potential loss)
+- Market conditions must support the signal direction (overall trend alignment)
+- Confidence level must be above 60% (strong conviction in the analysis)
 
 **Risk Assessment:**
-- LOW: Single indicator, low volatility, stable trend
-- MEDIUM: Multiple indicators, moderate volatility, developing trend
-- HIGH: Strong confluence, high volatility, breakout/breakdown
+- LOW: Single indicator trigger, stable market conditions, clear trend
+- MEDIUM: Multiple indicators aligning, moderate price swings, developing trend changes
+- HIGH: Strong market signals, high price volatility, major trend shifts or breakouts
 
 **Timeframe Classification:**
-- SHORT: Intraday signals (minutes to hours)
-- MEDIUM: Swing trading signals (days to weeks)
-- LONG: Position trading signals (weeks to months)
+- SHORT: Quick trades (minutes to hours) - for active traders
+- MEDIUM: Swing trades (days to weeks) - for regular monitoring
+- LONG: Position trades (weeks to months) - for patient investors
 
-## Current Analysis Data
+## Current Market Analysis
 
- **Token**: {tokenSymbol} ({tokenAddress})
- **Current Price**: {currentPrice}
- **Timestamp**: {timestamp}
+**Token**: {tokenSymbol} ({tokenAddress})
+**Current Price**: {currentPrice}
+**Analysis Time**: {timestamp}
 
-**Technical Indicators**:
-- RSI: {rsi}
-- VWAP Deviation: {vwapDeviation}%
-- Bollinger %B: {percentB}
-- ADX: {adx}
-- ATR%: {atrPercent}%
-- OBV Z-Score: {obvZScore}
+**Market Health Indicators**:
+- Market Momentum (RSI): {rsi} (shows if token is overbought/oversold)
+- Price vs Average (VWAP Dev): {vwapDeviation}% (how far price is from normal trading range)
+- Volatility Band Position (%B): {percentB} (position within expected price range)
+- Trend Strength (ADX): {adx} (how strong the current trend is)
+- Price Volatility (ATR%): {atrPercent}% (how much price typically moves)
+- Volume Momentum (OBV): {obvZScore} (buying vs selling pressure)
 
-**Static Filter Results**:
-- Triggered Indicators: {triggeredIndicators}
-- Signal Candidates: {signalCandidates}
-- Confluence Score: {confluenceScore}
-- Risk Level: {riskLevel}
+**Automated Filter Results**:
+- Triggered Market Signals: {triggeredIndicators}
+- Potential Trade Opportunities: {signalCandidates}
+- Market Agreement Score: {confluenceScore}
+- Initial Risk Assessment: {riskLevel}
 
-Based on this comprehensive technical analysis, determine if a trading signal should be generated. Consider the confluence of indicators, market volatility, and potential risk-reward scenarios.
+## Analysis Task
 
-Provide your analysis in the following structured format:
+Based on this comprehensive market analysis, determine if a trading signal should be generated. Focus on explaining the market situation in terms that a beginner can understand, avoiding technical jargon where possible.
+
+Consider:
+1. How multiple indicators align to suggest market direction
+2. What the current price action tells us about market sentiment
+3. Risk-reward potential for different trading timeframes
+4. Market volatility and its impact on trade safety
+
+Provide your analysis in the following structured format, using beginner-friendly language in the reasoning:
+
 - shouldGenerateSignal: boolean
 - signalType: string (specific signal type from candidates)
 - direction: BUY or SELL or NEUTRAL
 - confidence: number (0-1, minimum 0.6 for signal generation)
-- reasoning: string (detailed explanation)
-- keyFactors: array of up to 3 most important factors
+- reasoning: string (explain in simple terms what the market is doing and why)
+- keyFactors: array of up to 3 most important factors (in plain language)
 - riskLevel: LOW or MEDIUM or HIGH
-- timeframe: SHORT or MEDIUM or LONG`,
+- timeframe: SHORT or MEDIUM or LONG
+- marketSentiment: string (describe overall market mood for this token)
+- priceExpectation: string (what might happen to price and why)`,
 });
 
 /**
@@ -132,7 +143,7 @@ Analyze the external evidence and provide:
 
 /**
  * Signal Formatting Prompt
- * ユーザー向けシグナルメッセージの生成
+ * ユーザー向けシグナルメッセージの生成（初心者向けに分かりやすく）
  */
 export const signalFormattingPrompt = new PromptTemplate({
   inputVariables: [
@@ -146,22 +157,78 @@ export const signalFormattingPrompt = new PromptTemplate({
     "timeframe",
     "reasoning",
     "keyFactors",
+    "marketSentiment",
+    "priceExpectation",
     "technicalData",
   ],
-  template: `You are a crypto trading signal formatter. Create clear Telegram messages.
+  template: `You are a crypto trading signal formatter specializing in beginner-friendly explanations. Create clear, easy-to-understand Telegram messages that explain the market situation and trading recommendations without requiring technical analysis knowledge.
 
+## Input Data
 Token: {tokenSymbol}
 Address: {tokenAddress}
 Signal Type: {signalType}
 Direction: {direction}
-Price: {currentPrice}
+Current Price: {currentPrice}
 Confidence: {confidence}
 Risk Level: {riskLevel}
 Timeframe: {timeframe}
-
-Technical Data: {technicalData}
-Reasoning: {reasoning}
+Technical Reasoning: {reasoning}
 Key Factors: {keyFactors}
+Technical Data: {technicalData}
 
-Create a formatted signal message with level, title, message, priority, and tags.`,
+## Message Guidelines
+
+**Market Situation Explanation:**
+- Use simple analogies and everyday language
+- Explain what's happening with the token in plain terms
+- Avoid technical jargon (RSI, VWAP, etc.)
+- Focus on price trends, momentum, and market sentiment
+
+**Action Rationale:**
+- Clearly explain WHY this action is recommended
+- Use phrases like "because the price is showing signs of..." or "market momentum suggests..."
+- Include what could happen if the recommendation is followed vs ignored
+- Mention the expected timeframe in simple terms
+
+**Risk Communication:**
+- LOW risk: "This looks like a relatively safe opportunity"
+- MEDIUM risk: "This has potential but requires careful monitoring"
+- HIGH risk: "This is a high-reward opportunity but comes with significant risk"
+
+**Language Style:**
+- Use conversational tone
+- Include emojis for readability
+- Structure with clear sections
+- Keep sentences short and digestible
+
+## Required Output Format:
+
+Create a formatted signal message with:
+- **level**: string (INFO, ALERT, CRITICAL based on confidence and risk)
+- **title**: string (engaging headline summarizing the opportunity)
+- **message**: string (detailed explanation in beginner-friendly language)
+- **priority**: number (1-5, where 5 is highest priority)
+- **tags**: array of strings (relevant categories)
+
+## Message Structure:
+
+Title: Should be catchy and informative (e.g., "🚀 [TOKEN] Breaking Upward Momentum" or "⚠️ [TOKEN] Showing Weakness")
+
+Message should include:
+1. **Current Situation**: What's happening with the token right now
+2. **Why This Matters**: Simple explanation of market forces
+3. **Recommended Action**: Clear BUY/SELL/HOLD with reasoning
+4. **What to Expect**: Potential outcomes and timeframe
+5. **Risk Assessment**: Easy-to-understand risk explanation
+6. **Key Points**: 2-3 bullet points with main factors
+
+Example phrases to use:
+- "The price is gaining momentum because..."
+- "Market indicators suggest..."
+- "This token is showing signs of..."
+- "Based on recent trading patterns..."
+- "The current trend indicates..."
+- "Risk level is [X] because..."
+
+Make the message informative yet accessible to someone who doesn't know technical analysis.`,
 });

@@ -184,6 +184,8 @@ export const formatSignal = async (state: SignalGraphState): Promise<Partial<Sig
       timeframe: state.signalDecision.timeframe,
       reasoning: state.signalDecision.reasoning,
       keyFactors: state.signalDecision.keyFactors.join(", "),
+      marketSentiment: state.signalDecision.marketSentiment,
+      priceExpectation: state.signalDecision.priceExpectation,
       technicalData: JSON.stringify({
         rsi: state.technicalAnalysis.rsi,
         vwapDeviation: state.technicalAnalysis.vwap_deviation,
@@ -206,6 +208,8 @@ export const formatSignal = async (state: SignalGraphState): Promise<Partial<Sig
       "timeframe",
       "reasoning",
       "keyFactors",
+      "marketSentiment",
+      "priceExpectation",
       "technicalData",
     ];
     const missingVariables = requiredVariables.filter(
