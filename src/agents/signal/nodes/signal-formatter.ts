@@ -34,15 +34,58 @@ const SignalFormattingSchema = z.object({
 const createSimpleSignalResponse = (state: SignalGraphState) => {
   const { signalDecision, tokenSymbol, tokenAddress, currentPrice, technicalAnalysis } = state;
 
+  // Direction-based emoji selection
+  const getDirectionEmoji = (direction: string, riskLevel: string) => {
+    if (direction === "BUY") {
+      return riskLevel === "HIGH" ? "🚀⚠️" : "🚀💚";
+    }
+    if (direction === "SELL") {
+      return riskLevel === "HIGH" ? "📉⚠️" : "📉🔴";
+    }
+    return "📊🔄";
+  };
+
+  // Risk level emoji and formatting
+  const getRiskFormatting = (riskLevel: string) => {
+    switch (riskLevel) {
+      case "HIGH":
+        return { emoji: "🔴⚠️", text: "**HIGH RISK**" };
+      case "MEDIUM":
+        return { emoji: "🟡⚖️", text: "**MEDIUM RISK**" };
+      case "LOW":
+        return { emoji: "🟢🛡️", text: "**LOW RISK**" };
+      default:
+        return { emoji: "⚪", text: "**UNKNOWN RISK**" };
+    }
+  };
+
+  // Timeframe emoji
+  const getTimeframeEmoji = (timeframe: string) => {
+    switch (timeframe) {
+      case "SHORT":
+        return "⚡";
+      case "MEDIUM":
+        return "⏰";
+      case "LONG":
+        return "📅";
+      default:
+        return "🕐";
+    }
+  };
+
+  const directionEmoji = getDirectionEmoji(signalDecision!.direction, signalDecision!.riskLevel);
+  const riskFormatting = getRiskFormatting(signalDecision!.riskLevel);
+  const timeframeEmoji = getTimeframeEmoji(signalDecision!.timeframe);
+
   // アクションの決定
   const getRecommendedAction = (direction: string, riskLevel: string) => {
     if (direction === "BUY") {
-      return riskLevel === "HIGH" ? "CONSIDER BUY" : "BUY NOW";
+      return riskLevel === "HIGH" ? "🎯 **CONSIDER BUYING**" : "🚀 **BUY SIGNAL**";
     }
     if (direction === "SELL") {
-      return riskLevel === "HIGH" ? "SELL POSITION" : "CONSIDER SELLING";
+      return riskLevel === "HIGH" ? "📉 **CONSIDER SELLING**" : "🔻 **SELL SIGNAL**";
     }
-    return "HOLD AND MONITOR";
+    return "⏸️ **HOLD & MONITOR**";
   };
 
   const recommendedAction = getRecommendedAction(signalDecision!.direction, signalDecision!.riskLevel);
@@ -54,39 +97,56 @@ const createSimpleSignalResponse = (state: SignalGraphState) => {
 
   // Format technical analysis safely
   const formattedReasoning = escapeMarkdownV2(signalDecision!.reasoning);
-  const formattedKeyFactors = signalDecision!.keyFactors.map((factor) => `• ${escapeMarkdownV2(factor)}`).join("\n");
+  const formattedKeyFactors = signalDecision!.keyFactors.map((factor) => `▫️ ${escapeMarkdownV2(factor)}`).join("\n");
 
-  const message = `🚨🚨🚨 *${escapeMarkdownV2(tokenSymbol)}* 🚨🚨🚨
-💰 *TRADING SIGNAL ALERT* 💰
+  const message = `${directionEmoji} **${escapeMarkdownV2(tokenSymbol)} - ${escapeMarkdownV2(signalDecision!.signalType)}** ${directionEmoji}
 
-📋 *RECOMMENDED ACTION*: ${escapeMarkdownV2(recommendedAction)}
+🎯 **RECOMMENDED ACTION**: ${recommendedAction}
+💰 **Current Price**: $${escapeMarkdownV2(currentPrice.toString())}
+📊 **Confidence**: **${Math.round(signalDecision!.confidence * 100)}%** | ${riskFormatting.emoji} ${riskFormatting.text}
 
-📊 *SIGNAL DETAILS*
-• *Type*: ${escapeMarkdownV2(signalDecision!.signalType)}
-• *Direction*: ${escapeMarkdownV2(signalDecision!.direction)}
-• *Price*: $${escapeMarkdownV2(currentPrice.toString())}
-• *Confidence*: ${Math.round(signalDecision!.confidence * 100)}%
-
-🔍 *TECHNICAL ANALYSIS*
+🔍 **Market Situation**
 ${formattedReasoning}
 
-Key factors supporting this signal:
+${riskFormatting.emoji} **Risk Assessment**
+*This is a ${escapeMarkdownV2(signalDecision!.riskLevel.toLowerCase())} risk opportunity\\. ${
+    signalDecision!.riskLevel === "HIGH"
+      ? "High potential rewards but requires careful position sizing\\."
+      : signalDecision!.riskLevel === "MEDIUM"
+      ? "Moderate risk with balanced risk\\-reward potential\\."
+      : "Relatively stable with lower volatility expected\\."
+  }*
+
+${timeframeEmoji} **Timeframe**: ${escapeMarkdownV2(signalDecision!.timeframe)} \\- ${
+    signalDecision!.timeframe === "SHORT"
+      ? "*Active monitoring required*"
+      : signalDecision!.timeframe === "MEDIUM"
+      ? "*Regular check\\-ins recommended*"
+      : "*Patient approach suggested*"
+  }
+
+📌 **Key Factors**:
 ${formattedKeyFactors}
 
-⚠️ *RISK MANAGEMENT*
-• *Risk Level*: ${escapeMarkdownV2(signalDecision!.riskLevel)}
-• *Timeframe*: ${escapeMarkdownV2(signalDecision!.timeframe)}
-• *Note*: This is an automated technical signal\\. Always do your own research and manage risk accordingly\\.
+💡 *${
+    signalDecision!.direction === "BUY"
+      ? "Consider your risk tolerance before entering position"
+      : signalDecision!.direction === "SELL"
+      ? "Review your holdings and consider taking profits"
+      : "Stay alert for clearer market direction"
+  }*
 
-💡 _Always DYOR \\(Do Your Own Research\\) before making trading decisions_`;
+⚠️ _Always DYOR \\(Do Your Own Research\\) before making trading decisions_`;
+
+  const level = signalDecision!.riskLevel === "HIGH" ? 3 : signalDecision!.riskLevel === "MEDIUM" ? 2 : 1;
 
   return {
     finalSignal: {
-      level: 1 as const,
-      title: `🚨 ${tokenSymbol} Signal`,
+      level: level as 1 | 2 | 3,
+      title: `${directionEmoji} ${tokenSymbol} ${signalDecision!.signalType}`,
       message,
-      priority: signalDecision!.riskLevel === "HIGH" ? ("HIGH" as const) : ("MEDIUM" as const),
-      tags: [tokenSymbol.toLowerCase(), signalDecision!.signalType.toLowerCase()],
+      priority: signalDecision!.riskLevel as "LOW" | "MEDIUM" | "HIGH",
+      tags: [tokenSymbol.toLowerCase(), signalDecision!.signalType.toLowerCase(), signalDecision!.direction.toLowerCase()],
       buttons: createPhantomButtons(tokenAddress, tokenSymbol),
     },
   };
@@ -103,20 +163,30 @@ const createNoSignalResponse = (tokenAddress: string, tokenSymbol: string) => {
   return {
     finalSignal: {
       level: 1 as const,
-      title: `📊 ${tokenSymbol} Analysis`,
-      message: `📊 *${escapeMarkdownV2(tokenSymbol)} Market Analysis*
+      title: `🔍 ${tokenSymbol} Market Watch`,
+      message: `🔍 **${escapeMarkdownV2(tokenSymbol)} Market Analysis** 📊
 
-🔍 *ANALYSIS COMPLETE*
-Current market conditions don't warrant a trading signal\\.
+⚡ **CURRENT STATUS**: *No Signal Generated*
+🎯 **Market Condition**: Neutral trading range
 
-⚡ *MONITORING*
-• Technical indicators within normal range
-• No significant trend breakouts detected
-• Continuing market surveillance
+📈 **Analysis Summary**
+Current technical indicators are within normal parameters\\. No significant trend breakouts or momentum shifts detected at this time\\.
 
-💡 _Keep monitoring for better entry opportunities_`,
+🔄 **What This Means**
+▫️ *Price action is consolidating*
+▫️ *No clear directional bias established*
+▫️ *Market waiting for catalyst*
+
+⏰ **Next Steps**
+• 👀 **Continue monitoring** for trend development
+• 📊 **Watch key support/resistance levels**
+• ⚡ **Stay alert** for momentum changes
+
+💡 *Sometimes the best trade is no trade\\. Patience often pays off in crypto markets\\!*
+
+🔔 _We'll notify you when clearer opportunities emerge_`,
       priority: "LOW" as const,
-      tags: [tokenSymbol.toLowerCase(), "monitoring"],
+      tags: [tokenSymbol.toLowerCase(), "monitoring", "neutral"],
       buttons: createPhantomButtons(tokenAddress, tokenSymbol),
     },
   };

@@ -222,6 +222,65 @@ Message should include:
 5. **Risk Assessment**: Easy-to-understand risk explanation
 6. **Key Points**: 2-3 bullet points with main factors
 
+## Visual Formatting Guidelines:
+
+**Emoji Usage:**
+- 🚀 🌟 ⭐ 💫 - for bullish signals and positive momentum
+- 📈 📊 💹 💰 - for technical analysis and price movements
+- ⚠️ 🚨 ⚡ 🔥 - for alerts and important warnings
+- 📉 🔴 ⛔ 💸 - for bearish signals and risks
+- 🎯 🔍 💡 📌 - for targets and insights
+- ⏰ ⏳ 📅 - for timing and timeframes
+- 💎 🛡️ ⚖️ - for risk management and protection
+
+**Markdown Formatting:**
+- Use **bold** for important actions, prices, percentages, and key terms
+- Use *italic* for emphasis on market sentiment and expectations
+- Use monospace formatting for specific technical levels or addresses
+- Use • or ▫️ for bullet points
+- Use sections with clear headers
+
+**Message Structure Template:**
+
+[EMOJI] **[TOKEN SYMBOL] - [Signal Type]** [EMOJI]
+
+🎯 **RECOMMENDED ACTION**: [Clear Action]
+💰 **Current Price**: $[Price]
+📊 **Confidence**: [X]% | **Risk**: [Level]
+
+[SECTION EMOJI] **Market Situation**
+[Simple explanation of what's happening]
+
+[SECTION EMOJI] **Why This Matters**
+*[Market forces explanation]*
+
+[SECTION EMOJI] **What to Expect**
+• **Short-term**: [Expected movement]
+• **Timeframe**: [Duration]
+• **Price Target**: [If applicable]
+
+[RISK EMOJI] **Risk Assessment**
+[Easy-to-understand risk explanation with appropriate emoji]
+
+📌 **Key Factors**:
+▫️ [Factor 1]
+▫️ [Factor 2]
+▫️ [Factor 3]
+
+💡 *[Actionable insight or closing advice]*
+
+**Risk Level Formatting:**
+- **LOW RISK**: 🟢 Green indicators, 🛡️ safety emojis
+- **MEDIUM RISK**: 🟡 Yellow indicators, ⚖️ balance emojis
+- **HIGH RISK**: 🔴 Red indicators, ⚠️ warning emojis
+
+**Direction-Specific Emojis:**
+- **BUY signals**: 🚀 📈 💚 ⬆️ 🌟
+- **SELL signals**: 📉 🔴 ⬇️ 💸 ⚠️
+- **NEUTRAL/HOLD**: 📊 🔄 ⏸️ 🎯
+
+Make the message visually engaging while maintaining professionalism and clarity.
+
 Example phrases to use:
 - "The price is gaining momentum because..."
 - "Market indicators suggest..."
