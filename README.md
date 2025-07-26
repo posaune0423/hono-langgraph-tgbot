@@ -1,217 +1,250 @@
-# Hono LangGraph Telegram Bot
+# 🤖 Telegram Bot Template
 
-A Telegram bot built with Hono, LangGraph, and Drizzle ORM using Neon PostgreSQL database.
+A **minimal** and **production-ready** Telegram bot template built with modern technologies.
 
-## Features
+## ✨ Features
 
-- 🤖 Telegram bot with webhook support
-- 🗄️ PostgreSQL database with Drizzle ORM
-- 🧠 LangGraph integration for AI workflows
-- 🔗 Solana wallet integration
-- 📊 User profile management and chat history
-- 📈 OHLCV data collection and technical analysis
-- 🔄 Automated data cleanup for optimal performance
+- 🔷 **TypeScript** for type safety and better development experience
+- 🌐 **Hono** web framework for fast and lightweight API routes
+- 🤖 **grammY** for powerful Telegram Bot API integration
+- ☁️ **Cloudflare Workers** for serverless deployment
+- 🗄️ **Drizzle ORM** with PostgreSQL for database operations
+- 📊 **User management** with conversation history
+- 🔐 **Admin panel** for broadcast messaging
+- 🧪 **Testing** setup with Vitest
+- 📦 **Bun** for fast package management and execution
 
-## Setup
+## 🚀 Quick Start
 
-### 1. Environment Variables
+### Prerequisites
 
-Create a `.env` file with the following variables:
+- [Bun](https://bun.sh) (recommended) or Node.js 18+
+- PostgreSQL database
+- Telegram Bot Token (from [@BotFather](https://t.me/botfather))
+
+### Installation
+
+1. **Clone the repository**
+   ```bash
+   git clone <repository-url>
+   cd hono-langgraph-tgbot
+   ```
+
+2. **Install dependencies**
+   ```bash
+   bun install
+   ```
+
+3. **Set up environment variables**
+   ```bash
+   cp .dev.vars.example .dev.vars
+   ```
+   
+   Edit `.dev.vars` with your configuration:
+   ```bash
+   TELEGRAM_BOT_TOKEN=your_bot_token_here
+   DATABASE_URL=postgresql://user:password@localhost:5432/dbname
+   ADMIN_API_KEY=your_admin_api_key_here
+   ```
+
+4. **Set up the database**
+   ```bash
+   bun run db:generate
+   bun run db:migrate
+   ```
+
+5. **Start development server**
+   ```bash
+   bun run dev
+   ```
+
+### Basic Bot Commands
+
+The template includes these commands out of the box:
+
+- `/start` - Welcome message with inline keyboard
+- `/help` - Show available commands and features
+- `/stats` - Display user's message statistics
+- `/ping` - Test bot responsiveness
+
+## 📁 Project Structure
+
+```
+├── src/
+│   ├── constants/          # Application constants
+│   ├── db/                 # Database schema and configuration
+│   │   └── schema/         # Drizzle ORM schemas
+│   ├── lib/
+│   │   └── telegram/       # Telegram bot utilities
+│   ├── routes/             # API endpoints
+│   │   ├── admin.ts        # Admin panel routes
+│   │   └── webhook.ts      # Telegram webhook handler
+│   ├── types/              # TypeScript type definitions
+│   ├── utils/              # Utility functions
+│   └── worker.ts           # Cloudflare Workers entry point
+├── tests/                  # Test files
+└── scripts/                # Utility scripts
+```
+
+## 🔧 Development
+
+### Available Scripts
 
 ```bash
-# Database Configuration
-DATABASE_URL=postgresql://username:password@hostname:port/database
+# Development
+bun run dev              # Start development server
+bun run build            # Build for production
 
-# Telegram Bot Configuration
-TELEGRAM_BOT_TOKEN=your_telegram_bot_token_here
+# Database
+bun run db:generate      # Generate migrations
+bun run db:migrate       # Run migrations
+bun run db:seed          # Seed database (optional)
 
-# OpenAI Configuration (for LangGraph)
-OPENAI_API_KEY=your_openai_api_key_here
+# Testing
+bun run test:unit        # Run unit tests
+bun run test:watch       # Run tests in watch mode
 
-# Helius SDK Configuration (for Solana assets)
-HELIUS_API_KEY=your_helius_api_key_here
-
-# Vybe Network API Configuration (for OHLCV data)
-VYBE_API_KEY=your_vybe_api_key_here
-
-# Admin API Configuration
-ADMIN_API_KEY=your_admin_api_key_here
-
-# Development Environment
-NODE_ENV=development
+# Code Quality
+bun run format           # Format code with Biome
+bun run lint             # Lint code with Biome
+bun run ci               # Run format + lint
 ```
 
-### 2. Database Setup
+### Environment Variables
 
-1. Create a Neon PostgreSQL database
-2. Generate and run migrations:
+| Variable | Description | Required |
+|----------|-------------|----------|
+| `TELEGRAM_BOT_TOKEN` | Bot token from @BotFather | ✅ |
+| `DATABASE_URL` | PostgreSQL connection string | ✅ |
+| `ADMIN_API_KEY` | API key for admin endpoints | ✅ |
+
+## 🚀 Deployment
+
+### Cloudflare Workers
+
+1. **Install Wrangler CLI**
+   ```bash
+   npm install -g wrangler
+   ```
+
+2. **Configure wrangler.toml**
+   ```toml
+   name = "your-bot-name"
+   compatibility_date = "2024-01-01"
+   
+   [vars]
+   # Add your environment variables here
+   ```
+
+3. **Deploy**
+   ```bash
+   bun run deploy
+   ```
+
+### Other Platforms
+
+This template can be deployed to any platform that supports Node.js:
+- Vercel
+- Railway
+- Heroku
+- DigitalOcean App Platform
+
+## 📡 Admin Panel
+
+The template includes admin endpoints for managing the bot:
+
+### Send Message to User
+```bash
+POST /admin/send-message
+{
+  "userId": "123456789",
+  "message": "Hello from admin!",
+  "parseMode": "Markdown"
+}
+```
+
+### Broadcast Message to All Users
+```bash
+POST /admin/broadcast
+{
+  "message": "📢 Important announcement!",
+  "parseMode": "HTML",
+  "excludeUserIds": ["123456789"]
+}
+```
+
+## 🔨 Customization
+
+### Adding New Commands
+
+1. **Add command handler in `src/lib/telegram/command.ts`:**
+   ```typescript
+   bot.command("mycommand", async (ctx) => {
+     await ctx.reply("My custom response!");
+   });
+   ```
+
+2. **Add business logic in `src/lib/telegram/handler.ts`** for message processing
+
+3. **Update database schema** if needed in `src/db/schema/`
+
+### Database Schema
+
+The template includes two main tables:
+- **users** - User profiles and preferences
+- **messages** - Conversation history
+
+Extend these schemas or add new ones in `src/db/schema/`.
+
+## 🧪 Testing
 
 ```bash
-bun install
-bun run db:generate
-bun run db:push
+# Run all tests
+bun run test:unit
+
+# Run specific test file
+bun test tests/unit/utils/db.test.ts
+
+# Run tests in watch mode
+bun run test:watch
 ```
 
-### 3. Telegram Bot Setup
+## 📋 Features Included
 
-1. Create a bot with [@BotFather](https://t.me/botfather)
-2. Get your bot token and add it to `.env`
-3. Set the webhook URL (after deployment):
+✅ **Bot Infrastructure**
+- Webhook handling with grammY
+- Error handling and logging
+- Rate limiting for broadcasts
+- Admin authentication
 
-```bash
-# Using Telegram Bot API directly
-curl "https://api.telegram.org/bot<token>/setWebhook?url=https://<domain>/webhook/telegram"
+✅ **Database Integration**
+- User management
+- Message history
+- Type-safe queries with Drizzle ORM
 
-# Or using the internal webhook endpoint
-curl -X POST https://your-domain.com/webhook/set \
-  -H "Content-Type: application/json" \
-  -d '{"url": "https://your-domain.com/webhook/telegram"}'
-```
+✅ **Admin Features**
+- Send messages to specific users
+- Broadcast to all users
+- User statistics
 
-## Development
+✅ **Developer Experience**
+- TypeScript for type safety
+- Modern tooling (Bun, Biome)
+- Comprehensive testing setup
+- Well-structured project organization
 
-```bash
-bun install
-bun run dev
-```
+## 🤝 Contributing
 
-## Database Commands
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
 
-```bash
-# Generate migration files
-bun run db:generate
+## 📝 License
 
-# Push schema to database
-bun run db:push
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-# Run migrations
-bun run db:migrate
+---
 
-# Open Drizzle Studio
-bun run db:studio
-```
-
-## OHLCV Data Management
-
-The system automatically collects OHLCV (Open, High, Low, Close, Volume) data every 5 minutes for monitored tokens. To prevent database bloat, automated cleanup mechanisms are in place:
-
-### Automated Cleanup
-
-- **Frequency**: Every hour (when cron runs on the hour)
-- **Retention Policy**: Keeps the latest 500 records per token (~1.7 days of 5-minute data)
-- **Purpose**: Ensures optimal database performance while maintaining sufficient data for technical analysis
-
-### Manual Cleanup via Admin API
-
-You can manually trigger OHLCV data cleanup through the admin API:
-
-#### Count-based Cleanup (Recommended)
-
-```bash
-curl -X POST https://your-domain.com/admin/cleanup-ohlcv \
-  -H "Content-Type: application/json" \
-  -H "X-Admin-API-Key: your_admin_api_key" \
-  -d '{"method": "count", "keepCount": 500}'
-```
-
-#### Time-based Cleanup
-
-```bash
-curl -X POST https://your-domain.com/admin/cleanup-ohlcv \
-  -H "Content-Type: application/json" \
-  -H "X-Admin-API-Key: your_admin_api_key" \
-  -d '{"method": "days", "retentionDays": 30}'
-```
-
-### Configuration
-
-OHLCV data retention settings can be adjusted in `src/constants/database.ts`:
-
-```typescript
-export const OHLCV_RETENTION = {
-  MAX_RECORDS_PER_TOKEN: 500, // Records to keep per token
-  MIN_RECORDS_FOR_ANALYSIS: 50, // Minimum for technical analysis
-  CLEANUP_INTERVAL_MINUTES: 60, // Cleanup frequency
-} as const;
-```
-
-## Deployment
-
-```bash
-bun run deploy
-```
-
-## API Endpoints
-
-### Core Endpoints
-
-- `GET /` - Health check
-- `GET /health` - Health status
-- `POST /webhook/telegram` - Telegram webhook
-- `POST /webhook/set` - Set webhook URL
-- `GET /webhook/info` - Get webhook info
-
-### Admin Endpoints
-
-- `POST /admin/send-message` - Send message to specific user
-- `POST /admin/broadcast` - Broadcast message to all users
-- `POST /admin/cleanup-ohlcv` - Manual OHLCV data cleanup
-
-## Database Schema
-
-### Users Table
-
-- `userId` (Primary Key) - Telegram user ID
-- `walletAddress` - Solana wallet address
-- `age` - User age
-- `cryptoRiskTolerance` - Risk tolerance (1-10)
-- `totalAssets` - Total assets value
-- `cryptoAssets` - Crypto assets value
-- `panicLevel` - Panic level (1-10)
-- `heartRate` - Heart rate from wearables
-- `interests` - JSON array of interests
-- `currentSetupStep` - Current setup step
-- `setupCompleted` - Setup completion status
-- `waitingForInput` - Input waiting state
-- `lastUpdated` - Last update timestamp
-- `createdAt` - Creation timestamp
-
-### Chat History Table
-
-- `messageId` (Primary Key) - Message ID
-- `userId` (Foreign Key) - Reference to users table
-- `content` - Message content
-- `messageType` - Message type ('human' or 'ai')
-- `timestamp` - Message timestamp
-
-### Token OHLCV Table
-
-- `token` (Composite Primary Key) - Token address
-- `timestamp` (Composite Primary Key) - UNIX timestamp
-- `open` - Opening price
-- `high` - Highest price
-- `low` - Lowest price
-- `close` - Closing price
-- `volume` - Trading volume
-
-**Performance Features:**
-
-- Composite primary key on (token, timestamp) for efficient queries
-- Descending index on timestamp for latest data retrieval
-- Automated cleanup to maintain optimal size
-- Batch upsert operations for high-throughput data ingestion
-
-Chat history is now persisted in the Neon database, allowing conversations to continue across bot restarts. Users can clear their chat history using the `/clear` command.
-
-[For generating/synchronizing types based on your Worker configuration run](https://developers.cloudflare.com/workers/wrangler/commands/#types):
-
-```bash
-bun run cf-typegen
-```
-
-Pass the `CloudflareBindings` as generics when instantiation `Hono`:
-
-```ts
-// src/index.ts
-const app = new Hono<{ Bindings: CloudflareBindings }>();
-```
+**Built with ❤️ for the Telegram bot development community**

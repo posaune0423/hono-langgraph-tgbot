@@ -1,43 +1,3 @@
-export type SystemMessage = {
-  content: string;
-  tool_calls: {
-    name: string;
-    args: {
-      input: string;
-    };
-    type: string;
-    id: string;
-  }[];
-  usage_metadata?: {
-    output_tokens: number;
-    input_tokens: number;
-    total_tokens: number;
-  };
-};
-
-export type StreamChunk = {
-  generalist: {
-    messages: SystemMessage[];
-  };
-  analyzer: {
-    messages: SystemMessage[];
-  };
-  manager: {
-    messages: SystemMessage[];
-  };
-};
-
-// Setup step definition
-export enum SetupStep {
-  WALLET_ADDRESS = "wallet_address",
-  AGE = "age",
-  RISK_TOLERANCE = "risk_tolerance",
-  TOTAL_ASSETS = "total_assets",
-  CRYPTO_ASSETS = "crypto_assets",
-  PANIC_LEVEL = "panic_level",
-  COMPLETE = "complete",
-}
-
 /** Enum defining available log levels */
 export enum LogLevel {
   ERROR = 0,
@@ -93,7 +53,7 @@ export interface AdminBroadcastRequest {
   excludeUserIds?: string[]; // Optional: exclude specific users
 }
 
-// Updated BroadcastResult type with detailed results
+// Broadcast result type with detailed results
 export interface BroadcastResult {
   totalUsers: number;
   successCount: number;
@@ -119,18 +79,11 @@ export interface AdminBroadcastResponse {
   error?: string;
 }
 
-// neverthrow error types
+// Telegram error types for neverthrow
 export type TelegramError = {
   type: "forbidden" | "rate_limit" | "invalid_user" | "network" | "bot_error" | "unknown";
   message: string;
   userId?: string;
-};
-
-// Legacy broadcast error type for backwards compatibility
-export type TelegramBroadcastError = {
-  type: "bot_error" | "send_error" | "db_error";
-  message: string;
-  failedUsers?: string[];
 };
 
 export type DatabaseError = {

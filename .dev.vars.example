@@ -1,9 +1,6 @@
 # openai setting
 OPENAI_API_KEY="sk-XXXXXXX"
 
-# solana setting
-HELIUS_API_KEY="XXXXXXX"
-
 # tavily setting
 TAVILY_API_KEY="XXXXXXX"
 

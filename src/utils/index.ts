@@ -1,46 +1,5 @@
-import { TIMEOUT_MS } from "../constants";
-import type { StreamChunk } from "../types";
-import { logger } from "./logger";
-
-// timeout processing
-export const createTimeoutPromise = (timeoutMs: number = TIMEOUT_MS): Promise<never> =>
-  new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), timeoutMs));
-
-export const dumpTokenUsage = (chunk: StreamChunk) => {
-  // Dump token usage
-  if (
-    "analyzer" in chunk &&
-    chunk.analyzer?.messages?.length > 0 &&
-    chunk.analyzer.messages[chunk.analyzer.messages.length - 1]?.usage_metadata
-  ) {
-    logger.info(
-      "message handler",
-      "Usage metadata (analyzer)",
-      chunk.analyzer.messages[chunk.analyzer.messages.length - 1].usage_metadata,
-    );
-  } else if (
-    "generalist" in chunk &&
-    chunk.generalist?.messages?.length > 0 &&
-    chunk.generalist.messages[chunk.generalist.messages.length - 1]?.usage_metadata
-  ) {
-    logger.info(
-      "message handler",
-      "Usage metadata (generalist)",
-      chunk.generalist.messages[chunk.generalist.messages.length - 1].usage_metadata,
-    );
-  }
-};
-
-export const isAnalyzerMessage = (chunk: StreamChunk) => {
-  return "analyzer" in chunk && chunk.analyzer?.messages?.length > 0;
-};
-
-export const isGeneralistMessage = (chunk: StreamChunk) => {
-  return "generalist" in chunk && chunk.generalist?.messages?.length > 0;
-};
-
 /**
- * Sleep utility for rate limiting
+ * Sleep utility for rate limiting and delays
  */
 export const sleep = (ms: number): Promise<void> => {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -52,4 +11,43 @@ export const sleep = (ms: number): Promise<void> => {
  */
 export const convertToString = (value: number | undefined): string | null => {
   return value !== undefined ? value.toString() : null;
+};
+
+/**
+ * Get current timestamp in ISO format
+ */
+export const getCurrentTimestamp = (): string => {
+  return new Date().toISOString();
+};
+
+/**
+ * Safely parse JSON with error handling
+ */
+export const safeJsonParse = <T>(jsonString: string): T | null => {
+  try {
+    return JSON.parse(jsonString) as T;
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * Simple retry utility for async operations
+ */
+export const retry = async <T>(fn: () => Promise<T>, maxAttempts: number = 3, delayMs: number = 1000): Promise<T> => {
+  let lastError: Error;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+
+      if (attempt < maxAttempts) {
+        await sleep(delayMs);
+      }
+    }
+  }
+
+  throw lastError!;
 };

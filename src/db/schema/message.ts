@@ -1,7 +1,7 @@
 import { pgTable, text, timestamp } from "drizzle-orm/pg-core";
 import { users } from "./user";
 
-export const chatMessages = pgTable("chat_messages", {
+export const messages = pgTable("messages", {
   messageId: text("message_id").primaryKey().notNull(),
   userId: text("user_id")
     .notNull()
@@ -11,5 +11,5 @@ export const chatMessages = pgTable("chat_messages", {
   timestamp: timestamp("timestamp").defaultNow().notNull(),
 });
 
-export type ChatMessage = typeof chatMessages.$inferSelect;
-export type NewChatMessage = typeof chatMessages.$inferInsert;
+export type Message = typeof messages.$inferSelect;
+export type NewMessage = typeof messages.$inferInsert;

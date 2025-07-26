@@ -1,1 +1,0 @@
-ALTER TABLE "user_token_holdings" DROP COLUMN "amount";

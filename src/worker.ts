@@ -1,6 +1,6 @@
 import app from "./api";
-import { logger } from "./utils/logger";
 import { runCronTasks } from "./cron";
+import { logger } from "./utils/logger";
 
 export default {
   fetch: app.fetch,

@@ -1,8 +1,8 @@
-import { Hono } from "hono";
 import { webhookCallback } from "grammy";
+import { Hono } from "hono";
+import { TIMEOUT_MS } from "../constants";
 import { setupTelegramBot } from "../lib/telegram/bot";
 import { logger } from "../utils/logger";
-import { TIMEOUT_MS } from "../constants";
 
 const route = new Hono();
 

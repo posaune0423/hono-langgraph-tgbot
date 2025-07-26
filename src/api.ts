@@ -1,9 +1,9 @@
 import { Hono } from "hono";
-import webhookRoute from "./routes/webhook";
-import adminRoute from "./routes/admin";
-import { logger } from "./utils/logger";
 import { cors } from "hono/cors";
 import { ADMIN_API_KEY_HEADER, ALLOWED_ORIGINS } from "./constants";
+import adminRoute from "./routes/admin";
+import webhookRoute from "./routes/webhook";
+import { logger } from "./utils/logger";
 
 const app = new Hono();
 

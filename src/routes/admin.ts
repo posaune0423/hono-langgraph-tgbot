@@ -1,15 +1,339 @@
 import { Hono } from "hono";
-import { adminAuth } from "../utils/auth";
+import { err, ok, type Result } from "neverthrow";
 import { sendAdminMessage, sendBroadcastMessage } from "../lib/telegram/bot";
+import type { AdminBroadcastRequest, AdminSendMessageRequest } from "../types";
+import { adminAuth } from "../utils/auth";
 import { logger } from "../utils/logger";
-import type { AdminSendMessageRequest, AdminBroadcastRequest } from "../types";
-import { cleanupAllTokensOHLCVByCount, cleanupOldOHLCVData } from "../utils/db";
-import { OHLCV_RETENTION } from "../constants/database";
 
 const route = new Hono();
 
+/**
+ * Validation error types for better error categorization
+ */
+type ValidationError =
+  | { type: "missing_field"; field: string }
+  | { type: "invalid_format"; field: string; reason: string }
+  | { type: "value_too_large"; field: string; maxValue: number; currentValue: number }
+  | { type: "invalid_enum"; field: string; allowedValues: readonly string[] };
+
+/**
+ * Standard API response structure
+ */
+interface ApiResponse<T = any> {
+  readonly success: boolean;
+  readonly data?: T;
+  readonly error?: string;
+  readonly details?: any;
+}
+
+/**
+ * Content type configuration
+ */
+const SUPPORTED_CONTENT_TYPES = [
+  "application/json",
+  "multipart/form-data",
+  "application/x-www-form-urlencoded",
+] as const;
+
+const MAX_MESSAGE_LENGTH = 4096;
+const VALID_PARSE_MODES = ["HTML", "Markdown", "MarkdownV2"] as const;
+
 // Apply admin authentication middleware to all routes
 route.use("*", adminAuth);
+
+/**
+ * Create validation error with proper typing
+ */
+const createValidationError = (type: ValidationError["type"], details: any): ValidationError => {
+  switch (type) {
+    case "missing_field":
+      return { type, field: details.field };
+    case "invalid_format":
+      return { type, field: details.field, reason: details.reason };
+    case "value_too_large":
+      return { type, field: details.field, maxValue: details.maxValue, currentValue: details.currentValue };
+    case "invalid_enum":
+      return { type, field: details.field, allowedValues: details.allowedValues };
+    default:
+      return { type: "invalid_format", field: "unknown", reason: "Unknown validation error" };
+  }
+};
+
+/**
+ * Validate message content
+ */
+const validateMessage = (message: unknown): Result<string, ValidationError> => {
+  if (!message) {
+    return err(createValidationError("missing_field", { field: "message" }));
+  }
+
+  if (typeof message !== "string") {
+    return err(
+      createValidationError("invalid_format", {
+        field: "message",
+        reason: "Must be a string",
+      }),
+    );
+  }
+
+  const trimmedMessage = message.trim();
+  if (!trimmedMessage) {
+    return err(
+      createValidationError("invalid_format", {
+        field: "message",
+        reason: "Cannot be empty",
+      }),
+    );
+  }
+
+  if (trimmedMessage.length > MAX_MESSAGE_LENGTH) {
+    return err(
+      createValidationError("value_too_large", {
+        field: "message",
+        maxValue: MAX_MESSAGE_LENGTH,
+        currentValue: trimmedMessage.length,
+      }),
+    );
+  }
+
+  return ok(trimmedMessage);
+};
+
+/**
+ * Validate parse mode
+ */
+const validateParseMode = (
+  parseMode: unknown,
+): Result<(typeof VALID_PARSE_MODES)[number] | undefined, ValidationError> => {
+  if (!parseMode) {
+    return ok(undefined);
+  }
+
+  if (typeof parseMode !== "string") {
+    return err(
+      createValidationError("invalid_format", {
+        field: "parseMode",
+        reason: "Must be a string",
+      }),
+    );
+  }
+
+  if (!VALID_PARSE_MODES.includes(parseMode as any)) {
+    return err(
+      createValidationError("invalid_enum", {
+        field: "parseMode",
+        allowedValues: VALID_PARSE_MODES,
+      }),
+    );
+  }
+
+  return ok(parseMode as (typeof VALID_PARSE_MODES)[number]);
+};
+
+/**
+ * Validate user ID format
+ */
+const validateUserId = (userId: unknown): Result<string, ValidationError> => {
+  if (!userId) {
+    return err(createValidationError("missing_field", { field: "userId" }));
+  }
+
+  if (typeof userId !== "string") {
+    return err(
+      createValidationError("invalid_format", {
+        field: "userId",
+        reason: "Must be a string",
+      }),
+    );
+  }
+
+  const trimmedUserId = userId.trim();
+  if (!trimmedUserId) {
+    return err(
+      createValidationError("invalid_format", {
+        field: "userId",
+        reason: "Cannot be empty",
+      }),
+    );
+  }
+
+  // Basic validation for Telegram user ID format
+  if (!/^\d+$/.test(trimmedUserId)) {
+    return err(
+      createValidationError("invalid_format", {
+        field: "userId",
+        reason: "Must be a valid Telegram user ID (numeric)",
+      }),
+    );
+  }
+
+  return ok(trimmedUserId);
+};
+
+/**
+ * Validate exclude user IDs array
+ */
+const validateExcludeUserIds = (excludeUserIds: unknown): Result<string[] | undefined, ValidationError> => {
+  if (!excludeUserIds) {
+    return ok(undefined);
+  }
+
+  if (!Array.isArray(excludeUserIds)) {
+    return err(
+      createValidationError("invalid_format", {
+        field: "excludeUserIds",
+        reason: "Must be an array",
+      }),
+    );
+  }
+
+  const validUserIds: string[] = [];
+  for (const [index, userId] of excludeUserIds.entries()) {
+    if (typeof userId !== "string") {
+      return err(
+        createValidationError("invalid_format", {
+          field: `excludeUserIds[${index}]`,
+          reason: "All user IDs must be strings",
+        }),
+      );
+    }
+
+    const trimmedUserId = userId.trim();
+    if (!trimmedUserId) {
+      return err(
+        createValidationError("invalid_format", {
+          field: `excludeUserIds[${index}]`,
+          reason: "User ID cannot be empty",
+        }),
+      );
+    }
+
+    if (!/^\d+$/.test(trimmedUserId)) {
+      return err(
+        createValidationError("invalid_format", {
+          field: `excludeUserIds[${index}]`,
+          reason: "Must be a valid Telegram user ID (numeric)",
+        }),
+      );
+    }
+
+    validUserIds.push(trimmedUserId);
+  }
+
+  return ok(validUserIds);
+};
+
+/**
+ * Parse request body with comprehensive error handling
+ */
+const parseRequestBody = async (c: any): Promise<Result<any, ApiResponse>> => {
+  const contentType = c.req.header("content-type") || "";
+
+  // Check if content type is supported
+  const isSupportedContentType = SUPPORTED_CONTENT_TYPES.some((type) => contentType.includes(type));
+  if (!isSupportedContentType) {
+    logger.warn("Unsupported Content-Type", { contentType });
+    return err({
+      success: false,
+      error: "Unsupported Content-Type",
+      details: {
+        provided: contentType,
+        supported: SUPPORTED_CONTENT_TYPES,
+      },
+    });
+  }
+
+  try {
+    if (contentType.includes("application/json")) {
+      return ok(await c.req.json());
+    } else if (
+      contentType.includes("multipart/form-data") ||
+      contentType.includes("application/x-www-form-urlencoded")
+    ) {
+      const formData = await c.req.parseBody();
+
+      // Convert form data to a proper object structure
+      const body: any = {};
+      for (const [key, value] of Object.entries(formData)) {
+        if (key === "excludeUserIds" && typeof value === "string") {
+          // Parse comma-separated user IDs
+          body[key] = value
+            .split(",")
+            .map((id) => id.trim())
+            .filter((id) => id);
+        } else {
+          body[key] = value;
+        }
+      }
+
+      return ok(body);
+    }
+  } catch (parseError) {
+    const errorMessage = parseError instanceof Error ? parseError.message : "Unknown parse error";
+    logger.warn("Failed to parse request body", { error: errorMessage, contentType });
+
+    return err({
+      success: false,
+      error: "Failed to parse request body",
+      details: {
+        reason: errorMessage,
+        contentType,
+      },
+    });
+  }
+
+  return err({
+    success: false,
+    error: "Unsupported request format",
+  });
+};
+
+/**
+ * Format validation error for API response
+ */
+const formatValidationError = (validationError: ValidationError): ApiResponse => {
+  switch (validationError.type) {
+    case "missing_field":
+      return {
+        success: false,
+        error: `Missing required field: ${validationError.field}`,
+        details: { field: validationError.field, type: "missing" },
+      };
+    case "invalid_format":
+      return {
+        success: false,
+        error: `Invalid format for field '${validationError.field}': ${validationError.reason}`,
+        details: { field: validationError.field, type: "invalid_format", reason: validationError.reason },
+      };
+    case "value_too_large":
+      return {
+        success: false,
+        error: `Value too large for field '${validationError.field}': ${validationError.currentValue} (max: ${validationError.maxValue})`,
+        details: {
+          field: validationError.field,
+          type: "value_too_large",
+          maxValue: validationError.maxValue,
+          currentValue: validationError.currentValue,
+        },
+      };
+    case "invalid_enum":
+      return {
+        success: false,
+        error: `Invalid value for field '${validationError.field}'. Allowed values: ${validationError.allowedValues.join(", ")}`,
+        details: {
+          field: validationError.field,
+          type: "invalid_enum",
+          allowedValues: validationError.allowedValues,
+        },
+      };
+    default:
+      return {
+        success: false,
+        error: "Validation failed",
+        details: { type: "unknown" },
+      };
+  }
+};
 
 /**
  * Send message to specific user
@@ -17,139 +341,86 @@ route.use("*", adminAuth);
  */
 route.post("/send-message", async (c) => {
   try {
-    // Parse request body (support both JSON and form data)
-    const contentType = c.req.header("content-type") || "";
-    let body: AdminSendMessageRequest;
-
-    try {
-      if (contentType.includes("application/json")) {
-        // Parse JSON
-        body = (await c.req.json()) as AdminSendMessageRequest;
-      } else if (
-        contentType.includes("multipart/form-data") ||
-        contentType.includes("application/x-www-form-urlencoded")
-      ) {
-        // Parse form data
-        const formData = await c.req.parseBody();
-        body = {
-          userId: formData.userId as string,
-          message: formData.message as string,
-          parseMode: formData.parseMode as "HTML" | "Markdown" | "MarkdownV2" | undefined,
-        };
-      } else {
-        logger.warn("Unsupported Content-Type header", {
-          contentType,
-        });
-        return c.json(
-          {
-            success: false,
-            error: "Unsupported Content-Type",
-            details: "Please use 'application/json', 'multipart/form-data', or 'application/x-www-form-urlencoded'",
-          },
-          400,
-        );
-      }
-    } catch (parseError) {
-      logger.warn("Failed to parse request body", {
-        error: parseError instanceof Error ? parseError.message : "Unknown parse error",
-        contentType,
-      });
-      return c.json(
-        {
-          success: false,
-          error: "Failed to parse request body",
-          details: "Please ensure the request body is properly formatted",
-        },
-        400,
-      );
+    // Parse request body
+    const bodyResult = await parseRequestBody(c);
+    if (bodyResult.isErr()) {
+      return c.json(bodyResult.error, 400);
     }
 
-    // Validate body is an object
-    if (!body || typeof body !== "object") {
-      logger.warn("Request body is not an object", {
-        bodyType: typeof body,
-      });
-      return c.json(
-        {
-          success: false,
-          error: "Request body must be an object",
-        },
-        400,
-      );
+    const body = bodyResult.value;
+
+    // Validate required fields
+    const userIdResult = validateUserId(body.userId);
+    if (userIdResult.isErr()) {
+      return c.json(formatValidationError(userIdResult.error), 400);
     }
 
-    // Early return for missing userId
-    if (!body.userId) {
-      logger.warn("Missing userId", { body });
-      return c.json(
-        {
-          error: "Missing required fields",
-          required: ["userId", "message"],
-        },
-        400,
-      );
+    const messageResult = validateMessage(body.message);
+    if (messageResult.isErr()) {
+      return c.json(formatValidationError(messageResult.error), 400);
     }
 
-    // Validate message
-    const messageValidation = validateMessage(body.message);
-    if (!messageValidation.valid) {
-      logger.warn("Message validation failed", {
-        error: messageValidation.error,
-        details: messageValidation.details,
-      });
-      return c.json(
-        {
-          error: messageValidation.error,
-          ...messageValidation.details,
-        },
-        400,
-      );
+    const parseModeResult = validateParseMode(body.parseMode);
+    if (parseModeResult.isErr()) {
+      return c.json(formatValidationError(parseModeResult.error), 400);
     }
 
-    // Validate parseMode
-    const parseModeValidation = validateParseMode(body.parseMode);
-    if (!parseModeValidation.valid) {
-      logger.warn("ParseMode validation failed", {
-        parseMode: body.parseMode,
-      });
-      return c.json(
-        {
-          error: parseModeValidation.error,
-          ...parseModeValidation.details,
-        },
-        400,
-      );
-    }
+    // Create validated request object
+    const validatedRequest: AdminSendMessageRequest = {
+      userId: userIdResult.value,
+      message: messageResult.value,
+      parseMode: parseModeResult.value,
+    };
 
-    logger.info("Attempting to send message", {
-      userId: body.userId,
-      messageLength: body.message.length,
-      parseMode: body.parseMode,
+    logger.info("Processing admin send message request", {
+      userId: validatedRequest.userId,
+      messageLength: validatedRequest.message.length,
+      parseMode: validatedRequest.parseMode,
     });
 
     // Send message via Telegram
-    const result = await sendAdminMessage(body);
+    const result = await sendAdminMessage(validatedRequest);
 
     if (!result.success) {
-      logger.error("Failed to send message", {
-        userId: body.userId,
+      logger.error("Admin message send failed", {
+        userId: validatedRequest.userId,
         error: result.error,
       });
-      return c.json(result, 500);
+
+      return c.json(
+        {
+          success: false,
+          error: "Failed to send message",
+          details: { reason: result.error },
+        },
+        500,
+      );
     }
 
-    logger.info("Message sent successfully", {
-      userId: body.userId,
+    logger.info("Admin message sent successfully", {
+      userId: validatedRequest.userId,
       messageId: result.messageId,
     });
 
-    return c.json(result, 200);
+    return c.json(
+      {
+        success: true,
+        data: {
+          messageId: result.messageId,
+          userId: validatedRequest.userId,
+        },
+      },
+      200,
+    );
   } catch (error) {
-    logger.error("Unexpected error occurred", error);
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    logger.error("Unexpected error in send-message endpoint", { error: errorMessage });
+
     return c.json(
       {
         success: false,
         error: "Internal server error",
+        details: { message: "An unexpected error occurred" },
       },
       500,
     );
@@ -162,251 +433,94 @@ route.post("/send-message", async (c) => {
  */
 route.post("/broadcast", async (c) => {
   try {
-    // Parse request body (support both JSON and form data)
-    const contentType = c.req.header("content-type") || "";
-    let body: AdminBroadcastRequest;
-
-    try {
-      if (contentType.includes("application/json")) {
-        // Parse JSON
-        body = (await c.req.json()) as AdminBroadcastRequest;
-      } else if (
-        contentType.includes("multipart/form-data") ||
-        contentType.includes("application/x-www-form-urlencoded")
-      ) {
-        // Parse form data
-        const formData = await c.req.parseBody();
-        body = {
-          message: formData.message as string,
-          parseMode: formData.parseMode as "HTML" | "Markdown" | "MarkdownV2" | undefined,
-          excludeUserIds: formData.excludeUserIds
-            ? (formData.excludeUserIds as string)
-                .split(",")
-                .map((id) => id.trim())
-                .filter((id) => id)
-            : undefined,
-        };
-      } else {
-        logger.warn("admin/broadcast", "Unsupported Content-Type header", {
-          contentType,
-        });
-        return c.json(
-          {
-            success: false,
-            error: "Unsupported Content-Type",
-            details: "Please use 'application/json', 'multipart/form-data', or 'application/x-www-form-urlencoded'",
-          },
-          400,
-        );
-      }
-    } catch (parseError) {
-      logger.warn("admin/broadcast", "Failed to parse request body", {
-        error: parseError instanceof Error ? parseError.message : "Unknown parse error",
-        contentType,
-      });
-      return c.json(
-        {
-          success: false,
-          error: "Failed to parse request body",
-          details: "Please ensure the request body is properly formatted",
-        },
-        400,
-      );
+    // Parse request body
+    const bodyResult = await parseRequestBody(c);
+    if (bodyResult.isErr()) {
+      return c.json(bodyResult.error, 400);
     }
 
-    // Validate body is an object
-    if (!body || typeof body !== "object") {
-      logger.warn("admin/broadcast", "Request body is not an object", {
-        bodyType: typeof body,
-      });
-      return c.json(
-        {
-          success: false,
-          error: "Request body must be an object",
-        },
-        400,
-      );
+    const body = bodyResult.value;
+
+    // Validate required fields
+    const messageResult = validateMessage(body.message);
+    if (messageResult.isErr()) {
+      return c.json(formatValidationError(messageResult.error), 400);
     }
 
-    // Validate message
-    const messageValidation = validateMessage(body.message);
-    if (!messageValidation.valid) {
-      logger.warn("admin/broadcast", "Message validation failed", {
-        error: messageValidation.error,
-        details: messageValidation.details,
-      });
-      return c.json(
-        {
-          error: messageValidation.error,
-          ...messageValidation.details,
-        },
-        400,
-      );
+    const parseModeResult = validateParseMode(body.parseMode);
+    if (parseModeResult.isErr()) {
+      return c.json(formatValidationError(parseModeResult.error), 400);
     }
 
-    // Validate parseMode
-    const parseModeValidation = validateParseMode(body.parseMode);
-    if (!parseModeValidation.valid) {
-      logger.warn("admin/broadcast", "ParseMode validation failed", {
-        parseMode: body.parseMode,
-      });
-      return c.json(
-        {
-          error: parseModeValidation.error,
-          ...parseModeValidation.details,
-        },
-        400,
-      );
+    const excludeUserIdsResult = validateExcludeUserIds(body.excludeUserIds);
+    if (excludeUserIdsResult.isErr()) {
+      return c.json(formatValidationError(excludeUserIdsResult.error), 400);
     }
 
-    // Validate excludeUserIds
-    const excludeValidation = validateExcludeUserIds(body.excludeUserIds);
-    if (!excludeValidation.valid) {
-      logger.warn("admin/broadcast", "ExcludeUserIds validation failed", {
-        excludeUserIds: body.excludeUserIds,
-      });
-      return c.json({ error: excludeValidation.error }, 400);
-    }
+    // Create validated request object
+    const validatedRequest: AdminBroadcastRequest = {
+      message: messageResult.value,
+      parseMode: parseModeResult.value,
+      excludeUserIds: excludeUserIdsResult.value,
+    };
 
-    logger.info("admin/broadcast", "Attempting to broadcast message", {
-      messageLength: body.message.length,
-      parseMode: body.parseMode,
-      excludeCount: body.excludeUserIds?.length ?? 0,
+    logger.info("Processing admin broadcast request", {
+      messageLength: validatedRequest.message.length,
+      parseMode: validatedRequest.parseMode,
+      excludeCount: validatedRequest.excludeUserIds?.length || 0,
     });
 
     // Send broadcast message
-    const result = await sendBroadcastMessage(body);
+    const result = await sendBroadcastMessage(validatedRequest);
 
     if (!result.success) {
-      logger.error("admin/broadcast", "Broadcast failed", {
-        errors: result.results,
+      logger.error("Admin broadcast failed", {
+        error: result.error,
+        totalUsers: result.totalUsers,
       });
-      return c.json(result, 500);
+
+      return c.json(
+        {
+          success: false,
+          error: "Broadcast failed",
+          details: {
+            reason: result.error,
+            totalUsers: result.totalUsers,
+            results: result.results,
+          },
+        },
+        500,
+      );
     }
 
-    logger.info("admin/broadcast", "Broadcast completed", {
+    logger.info("Admin broadcast completed successfully", {
       totalUsers: result.totalUsers,
+      successCount: result.results?.filter((r) => r.success)?.length || 0,
     });
 
-    return c.json(result, 200);
+    return c.json(
+      {
+        success: true,
+        data: {
+          totalUsers: result.totalUsers,
+          results: result.results,
+        },
+      },
+      200,
+    );
   } catch (error) {
-    logger.error("admin/broadcast", "Unexpected error occurred", error);
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    logger.error("Unexpected error in broadcast endpoint", { error: errorMessage });
+
     return c.json(
       {
         success: false,
         error: "Internal server error",
-        totalUsers: 0,
-        successCount: 0,
-        failureCount: 0,
-        results: [],
+        details: { message: "An unexpected error occurred" },
       },
       500,
     );
   }
 });
-
-// POST /admin/cleanup-ohlcv - OHLCVデータの手動クリーンアップ
-route.post("/cleanup-ohlcv", async (c) => {
-  try {
-    const body = await c.req.json().catch(() => ({}));
-    const { method = "count", retentionDays, keepCount } = body;
-
-    logger.info("admin-cleanup-ohlcv", "Starting manual OHLCV cleanup", {
-      method,
-      retentionDays,
-      keepCount,
-      adminRequest: true,
-    });
-
-    if (method === "count") {
-      // 件数ベースのクリーンアップ
-      const finalKeepCount = keepCount || OHLCV_RETENTION.MAX_RECORDS_PER_TOKEN;
-      await cleanupAllTokensOHLCVByCount(finalKeepCount);
-
-      return c.json({
-        success: true,
-        message: `Successfully cleaned up OHLCV data, keeping ${finalKeepCount} records per token`,
-        method: "count",
-        keepCount: finalKeepCount,
-      });
-    } else if (method === "days") {
-      // 日数ベースのクリーンアップ
-      const finalRetentionDays = retentionDays || 30;
-      await cleanupOldOHLCVData(finalRetentionDays);
-
-      return c.json({
-        success: true,
-        message: `Successfully cleaned up OHLCV data older than ${finalRetentionDays} days`,
-        method: "days",
-        retentionDays: finalRetentionDays,
-      });
-    } else {
-      return c.json(
-        {
-          success: false,
-          error: "Invalid cleanup method. Use 'count' or 'days'",
-        },
-        400,
-      );
-    }
-  } catch (error) {
-    logger.error("admin-cleanup-ohlcv", "Failed to cleanup OHLCV data", error);
-    return c.json(
-      {
-        success: false,
-        error: "Failed to cleanup OHLCV data",
-        details: error instanceof Error ? error.message : "Unknown error",
-      },
-      500,
-    );
-  }
-});
-
-/**
- * Validation utilities
- */
-const validateMessage = (message: string) => {
-  if (!message) {
-    return { valid: false, error: "Message is required" };
-  }
-
-  if (message.length > 4096) {
-    return {
-      valid: false,
-      error: "Message too long",
-      details: { maxLength: 4096, currentLength: message.length },
-    };
-  }
-
-  return { valid: true };
-};
-
-const validateParseMode = (parseMode?: string) => {
-  if (!parseMode) return { valid: true };
-
-  const validParseModes = ["HTML", "Markdown", "MarkdownV2"];
-  if (!validParseModes.includes(parseMode)) {
-    return {
-      valid: false,
-      error: "Invalid parse mode",
-      details: { validModes: validParseModes },
-    };
-  }
-
-  return { valid: true };
-};
-
-const validateExcludeUserIds = (excludeUserIds?: unknown) => {
-  if (!excludeUserIds) return { valid: true };
-
-  if (!Array.isArray(excludeUserIds)) {
-    return {
-      valid: false,
-      error: "excludeUserIds must be an array of strings",
-    };
-  }
-
-  return { valid: true };
-};
 
 export default route;
