@@ -1,12 +1,22 @@
 # openai setting
 OPENAI_API_KEY="sk-XXXXXXX"
 
+# groq setting
+GROQ_API_KEY="XXXXXXX"
+
 # tavily setting
 TAVILY_API_KEY="XXXXXXX"
 
 # telegram setting
 TELEGRAM_BOT_TOKEN="XXXXXXX"
 
-DATABASE_URL="postgresql://"
-
+# cron setting
 CRON_SECRET="XXXXXXX"
+
+# log setting
+LOG_LEVEL="debug"
+
+# cloudflare setting
+CLOUDFLARE_ACCOUNT_ID="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+CLOUDFLARE_DATABASE_ID="hono-langgraph-tgbot"
+CLOUDFLARE_D1_TOKEN="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"

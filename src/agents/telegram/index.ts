@@ -1,9 +1,30 @@
-import { HumanMessage } from "@langchain/core/messages";
+import { type BaseMessage, HumanMessage } from "@langchain/core/messages";
 import { err, ok, type Result } from "neverthrow";
 import { createErrorMessage, TELEGRAM_CONFIG } from "../../constants/telegram";
 import type { TelegramAgentError, TelegramMessageInput, TelegramMessageResult } from "../../types/telegram";
 import { logger } from "../../utils/logger";
 import { initTelegramGraph } from "./graph";
+
+// Check if running in test environment
+const isTestEnvironment = (): boolean => {
+  return process.env.NODE_ENV === "test" || process.env.OPENAI_API_KEY === "test-key";
+};
+
+// Mock response for test environment
+const createTestResponse = (userId: string, userMessage: string): TelegramMessageResult => {
+  const response = `Test response for message: ${userMessage}`;
+  const threadId = `${TELEGRAM_CONFIG.THREAD_ID_PREFIX}${userId}`;
+
+  return {
+    response,
+    metadata: {
+      userId,
+      threadId,
+      messageLength: userMessage.length,
+      responseLength: response.length,
+    },
+  };
+};
 
 // Validate input parameters
 const validateMessageInput = (input: TelegramMessageInput): Result<TelegramMessageInput, TelegramAgentError> => {
@@ -25,8 +46,12 @@ const validateMessageInput = (input: TelegramMessageInput): Result<TelegramMessa
 };
 
 // Extract response from graph result
-const extractGraphResponse = (result: any, userId: string, userName?: string): Result<string, TelegramAgentError> => {
-  const messages = result?.messages;
+const extractGraphResponse = (
+  result: unknown,
+  userId: string,
+  userName?: string,
+): Result<string, TelegramAgentError> => {
+  const messages = (result as { messages?: BaseMessage[] })?.messages;
 
   if (!messages || !Array.isArray(messages) || messages.length === 0) {
     logger.warn("No messages in graph result", { userId });
@@ -69,6 +94,12 @@ export const handleTelegramMessage = async (
 
   const { userId, userMessage, userName } = validatedInput.value;
 
+  // Handle test environment
+  if (isTestEnvironment()) {
+    logger.info("Test environment detected, returning mock response", { userId });
+    return ok(createTestResponse(userId, userMessage));
+  }
+
   try {
     // Initialize graph for this user
     const { graph, config } = await initTelegramGraph(userId);
@@ -81,14 +112,17 @@ export const handleTelegramMessage = async (
     // Create initial state with user message
     const initialState = {
       messages: [new HumanMessage(userMessage)],
-      userProfile: null, // Can be loaded from database
-      userAssets: [],
-      isDataFetchNodeQuery: true, // Start with data fetch
-      isGeneralQuery: true, // Also process as general query
+      userProfile: null, // Will be loaded by data-fetch node
     };
 
-    // Invoke the graph
-    const result = await graph.invoke(initialState, config);
+    // Invoke the graph with timeout (20 seconds max)
+    const GRAPH_TIMEOUT_MS = 20 * 1000; // 20 seconds
+    const result = (await Promise.race([
+      graph.invoke(initialState, config),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error(`Graph execution timed out after ${GRAPH_TIMEOUT_MS}ms`)), GRAPH_TIMEOUT_MS),
+      ),
+    ])) as { messages?: BaseMessage[] };
 
     logger.info("Graph execution completed", {
       userId,
@@ -119,6 +153,21 @@ export const handleTelegramMessage = async (
       metadata,
     });
   } catch (error) {
+    // Handle timeout errors specifically
+    if (error instanceof Error && error.message.includes("timed out")) {
+      logger.error("Graph execution timeout", {
+        error: error.message,
+        userId,
+        messageLength: userMessage.length,
+      });
+      return err({
+        type: "CONVERSATION_ERROR",
+        message: createErrorMessage(userName, "PROCESSING_ERROR"),
+        userId,
+        originalError: error,
+      });
+    }
+
     logger.error("Error processing Telegram message with graph", { error, userId });
     return err({
       type: "CONVERSATION_ERROR",

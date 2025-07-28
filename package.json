@@ -2,10 +2,13 @@
   "name": "hono-langgraph-tgbot",
   "scripts": {
     "dev": "wrangler dev --test-scheduled",
+    "dev:local": "wrangler dev --local --persist --test-scheduled",
     "deploy": "wrangler deploy --minify",
     "cf-typegen": "wrangler types src/types/worker-configuration.d.ts --env-interface CloudflareBindings",
     "db:generate": "dotenvx run -f .dev.vars -- drizzle-kit generate",
     "db:migrate": "dotenvx run -f .dev.vars -- drizzle-kit migrate",
+    "db:migrate:local": "wrangler d1 migrations apply hono-langgraph-tgbot --local",
+    "db:migrate:remote": "wrangler d1 migrations apply hono-langgraph-tgbot",
     "db:push": "dotenvx run -f .dev.vars -- drizzle-kit push",
     "db:studio": "dotenvx run -f .dev.vars -- drizzle-kit studio",
     "db:seed": "bun --env-file=.dev.vars run scripts/seed.ts",
@@ -25,19 +28,15 @@
     "@langchain/groq": "^0.2.3",
     "@langchain/langgraph": "^0.3.11",
     "@langchain/openai": "^0.5.18",
-    "@neondatabase/serverless": "^1.0.1",
     "drizzle-orm": "^0.44.3",
     "grammy": "^1.37.0",
     "hono": "^4.8.9",
     "neverthrow": "^8.2.0",
-    "pg": "^8.16.3",
     "zod": "^3.25.76"
   },
   "devDependencies": {
     "@biomejs/biome": "2.1.2",
-    "@cloudflare/workers-types": "^4.20250726.0",
     "@types/bun": "^1.2.19",
-    "@types/pg": "^8.15.4",
     "drizzle-kit": "^0.31.4",
     "tsup": "^8.5.0",
     "wrangler": "^4.26.0"

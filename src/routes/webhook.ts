@@ -1,10 +1,11 @@
 import { webhookCallback } from "grammy";
 import { Hono } from "hono";
 import { TIMEOUT_MS } from "../constants";
+import { getDB } from "../db";
 import { setupTelegramBot } from "../lib/telegram/bot";
 import { logger } from "../utils/logger";
 
-const route = new Hono();
+const route = new Hono<{ Bindings: CloudflareBindings }>();
 
 route.post("/telegram", async (c) => {
   try {
@@ -16,13 +17,16 @@ route.post("/telegram", async (c) => {
       return c.json({ error: "Bot token not configured" }, 500);
     }
 
-    // Setup the bot
+    const db = getDB(c.env.DB);
+    logger.debug("initialized db", { db });
+
+    // Setup the bot with database
     const bot = setupTelegramBot();
 
     // botを初期化（必須）
     await bot.init();
 
-    // Create webhook callback
+    // Create webhook callback with reduced timeout
     const handleUpdate = webhookCallback(bot, "hono", {
       timeoutMilliseconds: TIMEOUT_MS,
     });

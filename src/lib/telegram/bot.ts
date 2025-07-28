@@ -9,6 +9,19 @@ import { setupCommands } from "./command";
 import { setupHandler } from "./handler";
 import { broadcastMessage, sendMessage } from "./utils";
 
+/**
+ * Extract error message from union error types
+ */
+const getErrorMessage = (error: { type: string; message?: string; entity?: string; id?: string }): string => {
+  if ("message" in error && error.message) {
+    return error.message;
+  }
+  if (error.type === "not_found" && "entity" in error && "id" in error) {
+    return `${error.entity} with ID ${error.id} not found`;
+  }
+  return `Error: ${error.type}`;
+};
+
 // Singleton bot instance
 let botInstance: Bot | null = null;
 
@@ -27,7 +40,7 @@ export const setupTelegramBot = () => {
   if (!botInstance) {
     botInstance = new Bot(token);
 
-    // commands
+    // commands (only if database is provided)
     setupCommands(botInstance);
 
     // text message handler
@@ -44,7 +57,10 @@ export const getBotInstance = (): Bot => {
   if (!botInstance) {
     setupTelegramBot();
   }
-  return botInstance!;
+  if (!botInstance) {
+    throw new Error("Failed to initialize Telegram bot");
+  }
+  return botInstance;
 };
 
 /**
@@ -84,7 +100,7 @@ export const sendBroadcastMessage = async (request: AdminBroadcastRequest): Prom
     }),
     (error) => ({
       success: false,
-      error: error.message,
+      error: getErrorMessage(error),
       totalUsers: 0,
       results: [],
     }),

@@ -5,7 +5,7 @@ import adminRoute from "./routes/admin";
 import webhookRoute from "./routes/webhook";
 import { logger } from "./utils/logger";
 
-const app = new Hono();
+const app = new Hono<{ Bindings: CloudflareBindings }>();
 
 // CORS Middleware (from original index.ts)
 app.use(

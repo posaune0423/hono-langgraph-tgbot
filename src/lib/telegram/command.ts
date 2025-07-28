@@ -3,7 +3,106 @@ import { InlineKeyboard } from "grammy";
 import { getUserMessages, upsertUser } from "../../utils/db";
 import { logger } from "../../utils/logger";
 
+const ALL_COMMANDS: { command: string; description: string }[] = [
+  {
+    command: "start",
+    description: "Show this welcome message",
+  },
+  {
+    command: "help",
+    description: "Get help information",
+  },
+  {
+    command: "stats",
+    description: "View your usage statistics",
+  },
+  {
+    command: "ping",
+    description: "Test bot responsiveness",
+  },
+];
+
+// Common message generators
+const getHelpMessage = () => `
+🆘 *Help - Bot Commands*
+
+*Basic Commands:*
+• /start - Show welcome message
+• /help - Show this help message
+• /stats - View your message statistics
+• /ping - Test bot responsiveness
+
+*Features:*
+• Send me any text message and I'll respond
+• I can handle photos, voice messages, and documents (with basic responses)
+• All conversations are stored in the database
+• Built with modern TypeScript and serverless technology
+
+*Need Support?*
+This is a template bot for developers. Check the repository for documentation and examples.
+`;
+
+const getStatsMessage = async (userId: string) => {
+  const messagesResult = await getUserMessages(userId, 1000);
+
+  if (messagesResult.isErr()) {
+    throw new Error("Error retrieving statistics");
+  }
+
+  const messages = messagesResult.value;
+  const humanMessages = messages.filter((m) => m.messageType === "human");
+  const aiMessages = messages.filter((m) => m.messageType === "ai");
+
+  const firstMessage = messages.at(-1);
+  const lastMessage = messages.at(0);
+
+  return `
+📊 *Your Bot Statistics*
+
+💬 *Messages Sent:* ${humanMessages.length}
+🤖 *Bot Responses:* ${aiMessages.length}
+📅 *First Message:* ${firstMessage?.timestamp ? new Date(firstMessage.timestamp).toLocaleDateString() : "N/A"}
+🕐 *Last Activity:* ${lastMessage?.timestamp ? new Date(lastMessage.timestamp).toLocaleString() : "N/A"}
+
+Thanks for using the bot! 🎉
+  `;
+};
+
+const getPingMessage = (responseTime: number) =>
+  `🏓 **Pong!**\n\n⚡ Response time: ${responseTime}ms\n🕐 Server time: ${new Date().toLocaleString()}`;
+
+// Common handlers
+const handleHelp = async (replyFn: (text: string, options?: any) => Promise<any>) => {
+  await replyFn(getHelpMessage(), { parse_mode: "Markdown" });
+};
+
+const handleStats = async (userId: string | undefined, replyFn: (text: string, options?: any) => Promise<any>) => {
+  if (!userId) {
+    await replyFn("Could not retrieve user information.");
+    return;
+  }
+
+  try {
+    const statsMessage = await getStatsMessage(userId);
+    await replyFn(statsMessage, { parse_mode: "Markdown" });
+  } catch (error) {
+    logger.error("Error getting user stats", error);
+    await replyFn("Error retrieving your statistics. Please try again.");
+  }
+};
+
+const handlePing = async (replyFn: (text: string, options?: any) => Promise<any>) => {
+  const startTime = Date.now();
+  const message = await replyFn("🏓 Pinging...");
+  const endTime = Date.now();
+  const responseTime = endTime - startTime;
+
+  return { message, responseTime };
+};
+
 export const setupCommands = (bot: Bot) => {
+  bot.api.setMyCommands(ALL_COMMANDS);
+
   bot.command("start", async (ctx) => {
     const userId = ctx.from?.id.toString();
     const firstName = ctx.from?.first_name;
@@ -24,31 +123,31 @@ export const setupCommands = (bot: Bot) => {
     });
 
     const welcomeMessage = `
-🤖 **Welcome to the Telegram Bot Template!**
+🤖 *Welcome to the Telegram Bot Template!*
 
 Hello ${firstName || username || "there"}! 👋
 
 This is a simple bot template built with:
-• **TypeScript** for type safety
-• **Hono** for web framework
-• **grammY** for Telegram Bot API
-• **Cloudflare Workers** for serverless deployment
-• **Drizzle ORM** for database operations
+• *TypeScript* for type safety
+• *Hono* for web framework
+• *grammY* for Telegram Bot API
+• *Cloudflare Workers* for serverless deployment
+• *Drizzle ORM* for database operations
 
-**Available Commands:**
-/start - Show this welcome message
-/help - Get help information
-/stats - View your usage statistics
-/ping - Test bot responsiveness
+*Available Commands:*
+• /start - Show this welcome message
+• /help - Get help information
+• /stats - View your usage statistics
+• /ping - Test bot responsiveness
 
 Try sending me any message and I'll respond! ✨
     `;
 
     const keyboard = new InlineKeyboard()
-      .text("📊 View Stats", "view_stats")
-      .text("🏓 Ping", "ping_bot")
+      .text("📊 View Stats", "stats")
+      .text("🏓 Ping", "ping")
       .row()
-      .text("ℹ️ Help", "show_help");
+      .text("ℹ️ Help", "help");
 
     await ctx.reply(welcomeMessage, {
       parse_mode: "Markdown",
@@ -59,116 +158,50 @@ Try sending me any message and I'll respond! ✨
   });
 
   bot.command("help", async (ctx) => {
-    const helpMessage = `
-🆘 **Help - Bot Commands**
-
-**Basic Commands:**
-• \`/start\` - Show welcome message
-• \`/help\` - Show this help message
-• \`/stats\` - View your message statistics
-• \`/ping\` - Test bot responsiveness
-
-**Features:**
-• Send me any text message and I'll respond
-• I can handle photos, voice messages, and documents (with basic responses)
-• All conversations are stored in the database
-• Built with modern TypeScript and serverless technology
-
-**Need Support?**
-This is a template bot for developers. Check the repository for documentation and examples.
-    `;
-
-    await ctx.reply(helpMessage, {
-      parse_mode: "Markdown",
-    });
+    await handleHelp((text, options) => ctx.reply(text, options));
   });
 
   bot.command("stats", async (ctx) => {
-    const userId = ctx.from?.id.toString();
-
-    if (!userId) {
-      await ctx.reply("Could not retrieve user information.");
-      return;
-    }
-
-    try {
-      const messagesResult = await getUserMessages(userId, 1000);
-
-      if (messagesResult.isErr()) {
-        await ctx.reply("Error retrieving your statistics. Please try again.");
-        return;
-      }
-
-      const messages = messagesResult.value;
-      const humanMessages = messages.filter((m) => m.messageType === "human");
-      const aiMessages = messages.filter((m) => m.messageType === "ai");
-
-      const statsMessage = `
-📊 **Your Bot Statistics**
-
-💬 **Messages Sent:** ${humanMessages.length}
-🤖 **Bot Responses:** ${aiMessages.length}
-📅 **First Message:** ${messages.length > 0 ? new Date(messages[messages.length - 1].timestamp).toLocaleDateString() : "N/A"}
-🕐 **Last Activity:** ${messages.length > 0 ? new Date(messages[0].timestamp).toLocaleString() : "N/A"}
-
-Thanks for using the bot! 🎉
-      `;
-
-      await ctx.reply(statsMessage, {
-        parse_mode: "Markdown",
-      });
-    } catch (error) {
-      logger.error("Error getting user stats", error);
-      await ctx.reply("Error retrieving your statistics. Please try again.");
-    }
+    await handleStats(ctx.from?.id.toString(), (text, options) => ctx.reply(text, options));
   });
 
   bot.command("ping", async (ctx) => {
-    const startTime = Date.now();
-    const message = await ctx.reply("🏓 Pinging...");
-    const endTime = Date.now();
-    const responseTime = endTime - startTime;
+    const result = await handlePing((text) => ctx.reply(text));
 
-    if (!ctx.chat?.id) {
+    if (!ctx.chat?.id || !result) {
       await ctx.reply("Error: Chat ID not available.");
       return;
     }
 
     await ctx.api.editMessageText(
       ctx.chat.id,
-      message.message_id,
-      `🏓 **Pong!**\n\n⚡ Response time: ${responseTime}ms\n🕐 Server time: ${new Date().toLocaleString()}`,
+      result.message.message_id,
+      getPingMessage(result.responseTime),
       { parse_mode: "Markdown" },
     );
   });
 
-  // Handle inline keyboard callbacks
-  bot.callbackQuery("view_stats", async (ctx) => {
+  // Callback query handlers for inline keyboard buttons
+  bot.callbackQuery("help", async (ctx) => {
     await ctx.answerCallbackQuery();
-    if (ctx.chat?.id) {
-      await ctx.api.sendMessage(ctx.chat.id, "/stats");
-    }
+    await handleHelp((text, options) => ctx.editMessageText(text, options));
   });
 
-  bot.callbackQuery("ping_bot", async (ctx) => {
-    await ctx.answerCallbackQuery("🏓 Pong!");
+  bot.callbackQuery("stats", async (ctx) => {
+    await ctx.answerCallbackQuery();
+    await handleStats(ctx.from?.id.toString(), (text, options) => ctx.editMessageText(text, options));
+  });
 
-    if (!ctx.chat?.id || !ctx.callbackQuery?.message?.message_id) {
-      return;
-    }
+  bot.callbackQuery("ping", async (ctx) => {
+    await ctx.answerCallbackQuery();
 
-    await ctx.api.editMessageText(
-      ctx.chat.id,
-      ctx.callbackQuery.message.message_id,
-      `🏓 **Pong!**\n\nResponse time: ~${(Math.random() * 100) | 0}ms\nServer time: ${new Date().toLocaleString()}`,
+    const result = await handlePing((text) => ctx.editMessageText(text));
+
+    if (!result) return;
+
+    await ctx.editMessageText(
+      getPingMessage(result.responseTime),
       { parse_mode: "Markdown" },
     );
-  });
-
-  bot.callbackQuery("show_help", async (ctx) => {
-    await ctx.answerCallbackQuery();
-    if (ctx.chat?.id) {
-      await ctx.api.sendMessage(ctx.chat.id, "/help");
-    }
   });
 };

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test";
+import type { Bot } from "grammy";
 
 // Simple unit tests without complex mocking for Bun test runner
 describe("Telegram Handler", () => {
@@ -18,7 +19,7 @@ describe("Telegram Handler", () => {
     };
 
     // Should not throw when called with mock bot
-    expect(() => handlerModule.setupHandler(mockBot as any)).not.toThrow();
+    expect(() => handlerModule.setupHandler(mockBot as unknown as Bot)).not.toThrow();
   });
 
   it("should handle text messages with basic structure", async () => {
@@ -36,14 +37,14 @@ describe("Telegram Handler", () => {
     let messageHandlerRegistered = false;
 
     const mockBot = {
-      on: (event: string, handler: Function) => {
+      on: (event: string, _handler: () => void) => {
         if (event === "message:text") textHandlerRegistered = true;
         if (event === "message") messageHandlerRegistered = true;
       },
       command: () => {},
     };
 
-    handlerModule.setupHandler(mockBot as any);
+    handlerModule.setupHandler(mockBot as unknown as Bot);
 
     expect(textHandlerRegistered).toBe(true);
     expect(messageHandlerRegistered).toBe(true);

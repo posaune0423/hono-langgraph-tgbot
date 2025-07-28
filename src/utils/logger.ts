@@ -64,35 +64,52 @@ const colorize = (message: string, level: LogLevel): string => {
   return `${color}${message}${reset}`;
 };
 
-const formatMessage = (level: LogLevel, ...args: unknown[]): string => {
+const formatHeader = (level: LogLevel): string => {
   const timestamp = `[${getTimestamp()}]`;
   const levelTag = `[${level}]`;
-  const message = args.map((arg) => (typeof arg === "string" ? arg : JSON.stringify(arg))).join(" ");
-  const fullMessage = `${timestamp} ${levelTag} ${message}`;
+  return colorize(`${timestamp} ${levelTag}`, level);
+};
 
-  return colorize(fullMessage, level);
+const filterArgs = (...args: unknown[]): unknown[] => {
+  return args.filter((arg) => {
+    // 単純な数値は除外
+    if (typeof arg === "number") return false;
+    // 空文字列やundefined、nullは除外
+    if (arg === null || arg === undefined || arg === "") return false;
+    return true;
+  });
 };
 
 export const logger = {
   log: (...args: unknown[]) => {
     if (!shouldLog(LogLevel.LOG)) return;
-    console.log(formatMessage(LogLevel.LOG, ...args));
+    const header = formatHeader(LogLevel.LOG);
+    const filteredArgs = filterArgs(...args);
+    console.log(header, ...filteredArgs);
   },
   info: (...args: unknown[]) => {
     if (!shouldLog(LogLevel.INFO)) return;
-    console.info(formatMessage(LogLevel.INFO, ...args));
+    const header = formatHeader(LogLevel.INFO);
+    const filteredArgs = filterArgs(...args);
+    console.info(header, ...filteredArgs);
   },
   debug: (...args: unknown[]) => {
     if (!shouldLog(LogLevel.DEBUG)) return;
-    console.debug(formatMessage(LogLevel.DEBUG, ...args));
+    const header = formatHeader(LogLevel.DEBUG);
+    const filteredArgs = filterArgs(...args);
+    console.debug(header, ...filteredArgs);
   },
   warn: (...args: unknown[]) => {
     if (!shouldLog(LogLevel.WARN)) return;
-    console.warn(formatMessage(LogLevel.WARN, ...args));
+    const header = formatHeader(LogLevel.WARN);
+    const filteredArgs = filterArgs(...args);
+    console.warn(header, ...filteredArgs);
   },
   error: (...args: unknown[]) => {
     if (!shouldLog(LogLevel.ERROR)) return;
-    console.error(formatMessage(LogLevel.ERROR, ...args));
+    const header = formatHeader(LogLevel.ERROR);
+    const filteredArgs = filterArgs(...args);
+    console.error(header, ...filteredArgs);
   },
   /**
    * Get the currently set log level

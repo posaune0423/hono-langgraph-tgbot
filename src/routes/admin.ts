@@ -19,11 +19,11 @@ type ValidationError =
 /**
  * Standard API response structure
  */
-interface ApiResponse<T = any> {
+interface ApiResponse<T = unknown> {
   readonly success: boolean;
   readonly data?: T;
   readonly error?: string;
-  readonly details?: any;
+  readonly details?: unknown;
 }
 
 /**
@@ -44,7 +44,8 @@ route.use("*", adminAuth);
 /**
  * Create validation error with proper typing
  */
-const createValidationError = (type: ValidationError["type"], details: any): ValidationError => {
+// biome-ignore lint/suspicious/noExplicitAny: details object structure varies by validation type
+const createValidationError = (type: ValidationError["type"], details: Record<string, any>): ValidationError => {
   switch (type) {
     case "missing_field":
       return { type, field: details.field };
@@ -118,7 +119,7 @@ const validateParseMode = (
     );
   }
 
-  if (!VALID_PARSE_MODES.includes(parseMode as any)) {
+  if (!VALID_PARSE_MODES.includes(parseMode as (typeof VALID_PARSE_MODES)[number])) {
     return err(
       createValidationError("invalid_enum", {
         field: "parseMode",
@@ -226,6 +227,7 @@ const validateExcludeUserIds = (excludeUserIds: unknown): Result<string[] | unde
 /**
  * Parse request body with comprehensive error handling
  */
+// biome-ignore lint/suspicious/noExplicitAny: Hono context type is complex and varies by usage
 const parseRequestBody = async (c: any): Promise<Result<any, ApiResponse>> => {
   const contentType = c.req.header("content-type") || "";
 
@@ -253,6 +255,7 @@ const parseRequestBody = async (c: any): Promise<Result<any, ApiResponse>> => {
       const formData = await c.req.parseBody();
 
       // Convert form data to a proper object structure
+      // biome-ignore lint/suspicious/noExplicitAny: form data can contain mixed types
       const body: any = {};
       for (const [key, value] of Object.entries(formData)) {
         if (key === "excludeUserIds" && typeof value === "string") {

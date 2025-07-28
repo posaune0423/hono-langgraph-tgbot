@@ -26,13 +26,14 @@
   //     "bucket_name": "my-bucket"
   //   }
   // ],
-  // "d1_databases": [
-  //   {
-  //     "binding": "MY_DB",
-  //     "database_name": "my-database",
-  //     "database_id": ""
-  //   }
-  // ],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "hono-langgraph-tgbot",
+      "database_id": "6c994269-b251-4134-9089-e7cdf1781dc6",
+      "migrations_dir": "migrations"
+    }
+  ],
   // "ai": {
   //   "binding": "AI"
   // },

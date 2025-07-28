@@ -27,6 +27,6 @@
     "noUnusedParameters": false,
     "noPropertyAccessFromIndexSignature": false,
 
-    "types": ["bun"]
+    "types": ["./src/types/worker-configuration.d.ts", "bun"]
   }
 }

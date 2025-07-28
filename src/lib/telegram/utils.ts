@@ -212,7 +212,7 @@ const processBatch = async (
       return {
         userId: "unknown",
         success: false,
-        error: "Invalid user ID at index " + index,
+        error: `Invalid user ID at index ${index}`,
       } as const;
     }
 
@@ -243,6 +243,38 @@ const processBatch = async (
 };
 
 /**
+ * Validate batch configuration
+ */
+const validateBatchConfig = (batchSize: number, batchDelayMs: number): Result<void, TelegramError> => {
+  if (batchSize <= 0 || batchSize > 100) {
+    return err({
+      type: "invalid_user",
+      message: `Invalid batch size: ${batchSize} (must be between 1 and 100)`,
+    });
+  }
+
+  if (batchDelayMs < 0) {
+    return err({
+      type: "invalid_user",
+      message: `Invalid batch delay: ${batchDelayMs} (must be >= 0)`,
+    });
+  }
+
+  return ok(undefined);
+};
+
+/**
+ * Create batches from user IDs
+ */
+const createBatches = (userIds: readonly string[], batchSize: number): (readonly string[])[] => {
+  const batches: (readonly string[])[] = [];
+  for (let i = 0; i < userIds.length; i += batchSize) {
+    batches.push(userIds.slice(i, i + batchSize));
+  }
+  return batches;
+};
+
+/**
  * Send message to specific users with batch processing and rate limiting
  */
 export const sendMessage = async (
@@ -260,18 +292,9 @@ export const sendMessage = async (
   const { batchSize = 25, batchDelayMs = 1000, ...sendOptions } = options;
 
   // Validate batch configuration
-  if (batchSize <= 0 || batchSize > 100) {
-    return err({
-      type: "invalid_user",
-      message: `Invalid batch size: ${batchSize} (must be between 1 and 100)`,
-    });
-  }
-
-  if (batchDelayMs < 0) {
-    return err({
-      type: "invalid_user",
-      message: `Invalid batch delay: ${batchDelayMs} (must be >= 0)`,
-    });
+  const batchValidation = validateBatchConfig(batchSize, batchDelayMs);
+  if (batchValidation.isErr()) {
+    return err(batchValidation.error);
   }
 
   logger.info("Starting targeted message send", {
@@ -296,10 +319,7 @@ export const sendMessage = async (
 
   try {
     // Create batches
-    const batches: (readonly string[])[] = [];
-    for (let i = 0; i < userIds.length; i += batchSize) {
-      batches.push(userIds.slice(i, i + batchSize));
-    }
+    const batches = createBatches(userIds, batchSize);
 
     logger.info(`Processing ${batches.length} batches of up to ${batchSize} users each`);
 

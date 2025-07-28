@@ -6,7 +6,7 @@ describe("convertToString", () => {
     expect(convertToString(42)).toBe("42");
     expect(convertToString(0)).toBe("0");
     expect(convertToString(-5)).toBe("-5");
-    expect(convertToString(3.14159)).toBe("3.14159");
+    expect(convertToString(Math.PI)).toBe("3.141592653589793");
   });
 
   it("should convert undefined to null", () => {

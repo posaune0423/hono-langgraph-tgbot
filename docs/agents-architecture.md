@@ -2,6 +2,18 @@
 
 This document describes the architecture and organization of the AI agents system in the Hono LangGraph Telegram Bot project.
 
+## 🏗️ Technology Stack
+
+- **Runtime**: Cloudflare Workers (Serverless)
+- **Web Framework**: Hono (Fast, lightweight)
+- **Bot Framework**: grammY (Telegram Bot API)
+- **AI Framework**: LangGraph (Conversation workflows)
+- **LLM Providers**: OpenAI GPT-4o, Groq
+- **Database**: Cloudflare D1 (SQLite)
+- **ORM**: Drizzle ORM
+- **Language**: TypeScript
+- **Package Manager**: Bun
+
 ## 📁 Directory Structure
 
 ```
@@ -11,14 +23,11 @@ src/agents/
 │   ├── index.ts               # Main agent interface
 │   ├── graph.ts               # LangGraph workflow definition
 │   ├── graph-state.ts         # State management and annotations
-│   ├── graph-route.ts         # Routing logic between nodes
 │   ├── nodes/                 # Individual processing nodes
 │   │   ├── general.ts         # General conversation node
-│   │   ├── data-fetch.ts      # Data fetching node
-│   │   └── manager.ts         # Manager/orchestrator node
+│   │   └── data-fetch.ts      # Data fetching node
 │   └── prompts/               # Prompt templates
-│       ├── general.ts         # General conversation prompts
-│       └── manager.ts         # Manager prompts
+│       └── general.ts         # General conversation prompts
 ```
 
 ## 🏗️ Architecture Overview
@@ -162,6 +171,25 @@ export const generalistNode = async (state: typeof graphState.State) => {
 
 ## 🔧 Integration Points
 
+### **Database Integration** (`src/db/index.ts`)
+```typescript
+export function getDB(database: D1Database) {
+  return drizzle(database, { schema });
+}
+```
+
+**Features**:
+- Type-safe database operations
+- Automatic schema validation
+- Connection management via Cloudflare Workers
+- Migration support for schema evolution
+
+### **Data Fetch Node** (`nodes/data-fetch.ts`)
+- Loads user preferences and profile data
+- Retrieves conversation history for AI context
+- Handles data validation and error recovery
+- Prepares structured data for other nodes
+
 ### **Main Agent Interface** (`index.ts`)
 ```typescript
 export const handleTelegramMessage = async (
@@ -193,10 +221,22 @@ graph TD
     F --> G[Format for Telegram]
     G --> H[Send to User]
     
-    D --> I[Load User Data]
-    E --> J[LLM Processing]
-    E --> K[Tool Integration]
+    D --> I[Load User Data from D1]
+    D --> J[Load Message History]
+    E --> K[LLM Processing]
+    E --> L[Tool Integration]
+    E --> M[Save Response to D1]
 ```
+
+### Data Flow Details
+
+1. **User Input**: Telegram message received
+2. **Data Fetch**: Query D1 for user profile and conversation history
+3. **Context Building**: Combine user data with message history
+4. **AI Processing**: LangGraph nodes process with full context
+5. **Response Generation**: AI generates contextual response
+6. **Data Persistence**: Save interaction to D1 database
+7. **Response Delivery**: Send formatted response via Telegram
 
 ## 🛡️ Error Handling
 
@@ -251,6 +291,82 @@ graph TD
 - **Input Validation**: Prevent injection attacks
 - **Rate Limiting**: Handled at bot level
 - **User Data**: Secure storage and retrieval
+
+## 🗄️ Data Layer Integration
+
+### Database Architecture
+
+The agents system integrates with **Cloudflare D1** (SQLite) for persistent data storage:
+
+#### **Database Schema**
+- **`users`**: User profiles, preferences, and interaction state
+  - Telegram user information (ID, username, language)
+  - Activity tracking (last active, creation date)
+  - Bot interaction state
+
+- **`messages`**: Conversation history for AI context
+  - Message content and metadata
+  - User associations and timestamps
+  - Message type classification (human/ai)
+
+#### **Data Access Pattern**
+```typescript
+// Data Fetch Node queries user data
+const userProfile = await db
+  .select()
+  .from(users)
+  .where(eq(users.userId, telegramUserId))
+  .limit(1);
+
+// Conversation history for context
+const recentMessages = await db
+  .select()
+  .from(messages)
+  .where(eq(messages.userId, telegramUserId))
+  .orderBy(desc(messages.timestamp))
+  .limit(10);
+```
+
+#### **State Persistence**
+- **LangGraph State**: Stored in-memory during conversation
+- **User Preferences**: Persisted in D1 database
+- **Conversation History**: Stored for AI context and analytics
+- **Session Management**: Thread-based isolation per user
+
+### Database Performance Considerations
+
+- **Global Distribution**: D1 provides low-latency access worldwide
+- **Auto-scaling**: Serverless architecture scales with demand
+- **Connection Pooling**: Handled automatically by Cloudflare
+- **Query Optimization**: Drizzle ORM with typed queries
+
+## 🛡️ Data Security & Privacy
+
+### Security Measures
+- **Encrypted at Rest**: D1 provides encryption by default
+- **Access Control**: Worker-level database binding
+- **Input Validation**: All user inputs validated before storage
+- **SQL Injection Prevention**: Drizzle ORM parameterized queries
+
+### Privacy Considerations
+- **Data Minimization**: Only store necessary user data
+- **Retention Policy**: Consider implementing message history limits
+- **User Consent**: Telegram terms provide user consent framework
+- **Data Export**: Users can request conversation history
+
+## 📈 Performance Monitoring
+
+### Key Metrics
+- **Response Latency**: Database query performance
+- **Memory Usage**: LangGraph state management
+- **Database Operations**: Read/write patterns
+- **Error Rates**: Failed database connections
+
+### Optimization Strategies
+- **Query Batching**: Combine multiple database operations
+- **Caching**: In-memory caching for frequently accessed data
+- **Indexing**: Optimize database queries with proper indexes
+- **Pagination**: Limit conversation history retrieval
 
 ---
 

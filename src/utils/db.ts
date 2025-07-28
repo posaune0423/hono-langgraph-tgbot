@@ -16,7 +16,8 @@ type DatabaseError =
 /**
  * Create database error with proper typing
  */
-const createDbError = (type: DatabaseError["type"], details: any): DatabaseError => {
+// biome-ignore lint/suspicious/noExplicitAny: error details structure varies by error type
+const createDbError = (type: DatabaseError["type"], details: Record<string, any>): DatabaseError => {
   switch (type) {
     case "not_found":
       return { type, entity: details.entity, id: details.id };
@@ -32,7 +33,8 @@ const createDbError = (type: DatabaseError["type"], details: any): DatabaseError
 /**
  * Handle database errors with proper categorization and logging
  */
-const handleDbError = (operation: string, error: unknown, context?: any): DatabaseError => {
+// biome-ignore lint/suspicious/noExplicitAny: context can contain arbitrary debugging information
+const handleDbError = (operation: string, error: unknown, context?: Record<string, any>): DatabaseError => {
   const errorMessage = error instanceof Error ? error.message : String(error);
 
   logger.error(`Database operation failed: ${operation}`, {
@@ -161,7 +163,7 @@ export const updateUser = async (userId: string, updateData: UpdateUser): Promis
       .update(users)
       .set({
         ...updateData,
-        lastActiveAt: new Date(),
+        lastActiveAt: Date.now(),
       })
       .where(eq(users.userId, userId))
       .returning();
@@ -200,9 +202,14 @@ export const upsertUser = async (userData: NewUser): Promise<Result<User, Databa
 
   try {
     const db = getDB();
+    const currentTimestamp = Math.floor(Date.now() / 1000); // Convert to seconds for SQLite
+
     const [user] = await db
       .insert(users)
-      .values(userData)
+      .values({
+        ...userData,
+        lastActiveAt: currentTimestamp,
+      })
       .onConflictDoUpdate({
         target: users.userId,
         set: {
@@ -210,7 +217,7 @@ export const upsertUser = async (userData: NewUser): Promise<Result<User, Databa
           lastName: userData.lastName,
           username: userData.username,
           languageCode: userData.languageCode,
-          lastActiveAt: new Date(),
+          lastActiveAt: currentTimestamp,
         },
       })
       .returning();

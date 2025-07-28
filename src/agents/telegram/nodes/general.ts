@@ -1,29 +1,28 @@
-import { TavilySearchResults } from "@langchain/community/tools/tavily_search";
-import type { Tool } from "@langchain/core/tools";
-import { createReactAgent } from "@langchain/langgraph/prebuilt";
-import { gpt4oMini } from "../../model";
-import { type graphState, memory } from "../graph-state";
-import { generalPrompt } from "../prompts/general";
+import { HumanMessage } from "@langchain/core/messages";
+import { logger } from "../../../utils/logger";
+import { kimiK2 } from "../../model";
+import type { graphState } from "../graph-state";
 
-// Initialize tools array
-const tools: Tool[] = [];
-
-// Only add Tavily search if API key is available
-if (process.env.TAVILY_API_KEY) {
-  tools.push(new TavilySearchResults());
-}
+// Simplified generalist node for faster processing
 
 export const generalistNode = async (state: typeof graphState.State): Promise<Partial<typeof graphState.State>> => {
   const { messages } = state;
 
-  const agent = createReactAgent({
-    llm: gpt4oMini,
-    tools,
-    prompt: generalPrompt,
-    checkpointSaver: memory,
-  });
+  // Use simpler approach without React agent for faster response
+  try {
+    const result = await kimiK2.invoke(messages);
 
-  const result = await agent.invoke({ messages });
-
-  return { messages: [...result.messages] };
+    return {
+      messages: [...messages, result],
+    };
+  } catch (error) {
+    logger.error("Error in generalist node", { error });
+    // Return simple fallback response
+    const fallbackResponse = new HumanMessage(
+      "Sorry, I'm having trouble processing your request right now. Please try again!",
+    );
+    return {
+      messages: [...messages, fallbackResponse],
+    };
+  }
 };

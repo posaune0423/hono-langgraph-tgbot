@@ -2,8 +2,10 @@ import type { Bot, Context } from "grammy";
 import { handleTelegramMessage } from "../../agents/telegram";
 import { TELEGRAM_CONFIG } from "../../constants/telegram";
 import { createMessage, upsertUser } from "../../utils/db";
-import { generateId } from "../../utils/id";
 import { logger } from "../../utils/logger";
+
+// Track processing users to prevent concurrent requests
+const processingUsers = new Set<string>();
 
 // Extract user profile data from Telegram context
 const extractUserProfile = (ctx: Context) => ({
@@ -24,6 +26,14 @@ const handleTextMessage = async (ctx: Context) => {
     return;
   }
 
+  // Prevent concurrent processing for same user
+  if (processingUsers.has(userId)) {
+    logger.warn("Concurrent request detected, ignoring", { userId, messageText: messageText.substring(0, 50) });
+    return;
+  }
+
+  processingUsers.add(userId);
+
   try {
     // Upsert user profile
     await upsertUser({
@@ -36,7 +46,6 @@ const handleTextMessage = async (ctx: Context) => {
 
     // Save user message to database
     await createMessage({
-      messageId: generateId(),
       userId,
       content: messageText,
       messageType: "human",
@@ -65,7 +74,6 @@ const handleTextMessage = async (ctx: Context) => {
 
     // Save AI response to database
     await createMessage({
-      messageId: generateId(),
       userId,
       content: response,
       messageType: "ai",
@@ -77,6 +85,9 @@ const handleTextMessage = async (ctx: Context) => {
   } catch (error) {
     logger.error("Error in text message handler", { error, userId });
     await ctx.reply(TELEGRAM_CONFIG.DEFAULT_RESPONSES.PROCESSING_ERROR);
+  } finally {
+    // Always clean up processing state
+    processingUsers.delete(userId);
   }
 };
 

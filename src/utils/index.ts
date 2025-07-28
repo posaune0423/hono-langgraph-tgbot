@@ -35,7 +35,7 @@ export const safeJsonParse = <T>(jsonString: string): T | null => {
  * Simple retry utility for async operations
  */
 export const retry = async <T>(fn: () => Promise<T>, maxAttempts: number = 3, delayMs: number = 1000): Promise<T> => {
-  let lastError: Error;
+  let lastError: Error | undefined;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
@@ -49,5 +49,5 @@ export const retry = async <T>(fn: () => Promise<T>, maxAttempts: number = 3, de
     }
   }
 
-  throw lastError!;
+  throw lastError ?? new Error("Unknown error occurred");
 };

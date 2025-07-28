@@ -22,7 +22,7 @@ export const adminAuth = async (c: Context, next: Next) => {
 
   if (providedKey !== adminApiKey) {
     logger.warn("adminAuth", "Invalid admin API key provided", {
-      providedKey: providedKey.substring(0, 8) + "...",
+      providedKey: `${providedKey.substring(0, 8)}...`,
     });
     return c.json({ error: "Invalid admin API key" }, 403);
   }
