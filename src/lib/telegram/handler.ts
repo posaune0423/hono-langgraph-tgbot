@@ -1,99 +1,117 @@
 import type { Bot, Context } from "grammy";
+import { handleTelegramMessage } from "../../agents/telegram";
+import { TELEGRAM_CONFIG } from "../../constants/telegram";
 import { createMessage, upsertUser } from "../../utils/db";
 import { generateId } from "../../utils/id";
 import { logger } from "../../utils/logger";
 
-export const setupHandler = (bot: Bot) => {
-  bot.on("message:text", async (ctx: Context) => {
-    const userId = ctx.from?.id.toString();
-    const username = ctx.from?.username;
-    const firstName = ctx.from?.first_name;
-    const lastName = ctx.from?.last_name;
-    const languageCode = ctx.from?.language_code;
+// Extract user profile data from Telegram context
+const extractUserProfile = (ctx: Context) => ({
+  userId: ctx.from?.id.toString(),
+  username: ctx.from?.username,
+  firstName: ctx.from?.first_name,
+  lastName: ctx.from?.last_name,
+  languageCode: ctx.from?.language_code,
+});
 
-    if (!userId || !ctx.message?.text) {
-      logger.warn("User ID or message text is null");
-      return;
-    }
+// Handle text message processing with LangGraph
+const handleTextMessage = async (ctx: Context) => {
+  const { userId, username, firstName, lastName, languageCode } = extractUserProfile(ctx);
+  const messageText = ctx.message?.text;
 
-    try {
-      // Upsert user profile
-      await upsertUser({
-        userId,
-        firstName,
-        lastName,
-        username,
-        languageCode,
-      });
+  if (!userId || !messageText) {
+    logger.warn("Missing required data for message processing", { userId, hasText: !!messageText });
+    return;
+  }
 
-      // Save user message to database
-      await createMessage({
-        messageId: generateId(),
-        userId,
-        content: ctx.message.text,
-        messageType: "human",
-      });
-
-      // Simple echo response with some enhancements
-      const userMessage = ctx.message.text.toLowerCase();
-      let response: string;
-
-      if (userMessage.includes("hello") || userMessage.includes("hi")) {
-        response = `Hello ${firstName || username || "there"}! 👋 How can I help you today?`;
-      } else if (userMessage.includes("help")) {
-        response = "I'm a simple bot template. You can talk to me and I'll respond! Type /help for commands.";
-      } else if (userMessage.includes("time")) {
-        response = `The current time is: ${new Date().toLocaleString()}`;
-      } else {
-        response = `You said: "${ctx.message.text}"\n\nI'm a simple echo bot! Try saying "hello" or "help" for different responses.`;
-      }
-
-      // Save AI response to database
-      await createMessage({
-        messageId: generateId(),
-        userId,
-        content: response,
-        messageType: "ai",
-      });
-
-      await ctx.reply(response, {
-        parse_mode: "Markdown",
-      });
-
-      logger.info("Message processed successfully", { userId, messageLength: ctx.message.text.length });
-    } catch (error) {
-      logger.error("Error processing message", error);
-      await ctx.reply("Sorry, I encountered an error processing your message. Please try again.");
-    }
-  });
-
-  // Handle other message types
-  bot.on("message", async (ctx: Context) => {
-    const userId = ctx.from?.id.toString();
-
-    if (!userId) {
-      return;
-    }
-
-    // Upsert user profile for any interaction
+  try {
+    // Upsert user profile
     await upsertUser({
       userId,
-      firstName: ctx.from?.first_name,
-      lastName: ctx.from?.last_name,
-      username: ctx.from?.username,
-      languageCode: ctx.from?.language_code,
+      firstName,
+      lastName,
+      username,
+      languageCode,
     });
 
-    if (ctx.message?.photo) {
-      await ctx.reply("Nice photo! 📸 I can see you sent an image, but I only process text messages for now.");
-    } else if (ctx.message?.voice) {
-      await ctx.reply("I received your voice message! 🎤 However, I only process text messages at the moment.");
-    } else if (ctx.message?.document) {
-      await ctx.reply("Thanks for the document! 📄 I only handle text messages currently.");
+    // Save user message to database
+    await createMessage({
+      messageId: generateId(),
+      userId,
+      content: messageText,
+      messageType: "human",
+    });
+
+    // Process message with LangGraph agent
+    const result = await handleTelegramMessage({
+      userId,
+      userMessage: messageText,
+      userName: firstName || username,
+    });
+
+    let response: string;
+
+    if (result.isOk()) {
+      response = result.value.response;
+      logger.info("Message processed successfully with LangGraph", result.value.metadata);
     } else {
-      await ctx.reply(
-        "I received your message, but I only process text messages for now. Please send me a text message!",
-      );
+      response = result.error.message;
+      logger.error("LangGraph agent error", {
+        error: result.error,
+        userId,
+        messageLength: messageText.length,
+      });
     }
+
+    // Save AI response to database
+    await createMessage({
+      messageId: generateId(),
+      userId,
+      content: response,
+      messageType: "ai",
+    });
+
+    await ctx.reply(response, {
+      parse_mode: "Markdown",
+    });
+  } catch (error) {
+    logger.error("Error in text message handler", { error, userId });
+    await ctx.reply(TELEGRAM_CONFIG.DEFAULT_RESPONSES.PROCESSING_ERROR);
+  }
+};
+
+// Handle non-text messages with appropriate responses
+const handleNonTextMessage = async (ctx: Context) => {
+  const { userId, firstName, lastName, username, languageCode } = extractUserProfile(ctx);
+
+  if (!userId) return;
+
+  // Upsert user profile for any interaction
+  await upsertUser({
+    userId,
+    firstName,
+    lastName,
+    username,
+    languageCode,
   });
+
+  if (ctx.message?.photo) {
+    await ctx.reply("Nice photo! 📸 I can see you sent an image, but I only process text messages for now.");
+  } else if (ctx.message?.voice) {
+    await ctx.reply("I received your voice message! 🎤 However, I only process text messages at the moment.");
+  } else if (ctx.message?.document) {
+    await ctx.reply("Thanks for the document! 📄 I only handle text messages currently.");
+  } else {
+    await ctx.reply(
+      "I received your message, but I only process text messages for now. Please send me a text message!",
+    );
+  }
+};
+
+export const setupHandler = (bot: Bot) => {
+  // Handle text messages with LangGraph
+  bot.on("message:text", handleTextMessage);
+
+  // Handle other message types
+  bot.on("message", handleNonTextMessage);
 };

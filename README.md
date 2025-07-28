@@ -71,180 +71,27 @@ The template includes these commands out of the box:
 
 ```
 ├── src/
-│   ├── constants/          # Application constants
-│   ├── db/                 # Database schema and configuration
-│   │   └── schema/         # Drizzle ORM schemas
-│   ├── lib/
-│   │   └── telegram/       # Telegram bot utilities
-│   ├── routes/             # API endpoints
-│   │   ├── admin.ts        # Admin panel routes
-│   │   └── webhook.ts      # Telegram webhook handler
-│   ├── types/              # TypeScript type definitions
-│   ├── utils/              # Utility functions
-│   └── worker.ts           # Cloudflare Workers entry point
-├── tests/                  # Test files
-└── scripts/                # Utility scripts
+│   ├── constants # 諸々の定数を記述, 責務毎に分かりやすい名前のファイルを作成して管理しやすくしてください
+│   ├── cron.ts # cron処理で行う処理を記述
+│   ├── agents/ # LangGraph agents implementation
+│   │   ├── model.ts # LLM model configurations
+│   │   └── telegram/ # Telegram-specific agent
+│   ├── lib # third-party libraryやlibとして切り出したほうがいいinternalなmoduleなどを格納
+│   ├── routes # Honoのroute、APIの各endpointを管理、ある程度の責務でまとめたrouteとして渡す
+│   ├── types # Typescriptの型定義
+│   ├── utils # globalに使うutil関数
+│   └── worker.ts # cloudflare workerのendpoint
+├── docs/ # Project documentation
+│   └── agents-architecture.md # AI agents architecture guide
+├── tests/
+│   ├── unit/ # Unit tests
+│   └── integration/ # Integration tests
 ```
+
+For detailed information about the AI agents architecture, see [docs/agents-architecture.md](./docs/agents-architecture.md).
 
 ## 🔧 Development
 
 ### Available Scripts
 
-```bash
-# Development
-bun run dev              # Start development server
-bun run build            # Build for production
-
-# Database
-bun run db:generate      # Generate migrations
-bun run db:migrate       # Run migrations
-bun run db:seed          # Seed database (optional)
-
-# Testing
-bun run test:unit        # Run unit tests
-bun run test:watch       # Run tests in watch mode
-
-# Code Quality
-bun run format           # Format code with Biome
-bun run lint             # Lint code with Biome
-bun run ci               # Run format + lint
 ```
-
-### Environment Variables
-
-| Variable | Description | Required |
-|----------|-------------|----------|
-| `TELEGRAM_BOT_TOKEN` | Bot token from @BotFather | ✅ |
-| `DATABASE_URL` | PostgreSQL connection string | ✅ |
-| `ADMIN_API_KEY` | API key for admin endpoints | ✅ |
-
-## 🚀 Deployment
-
-### Cloudflare Workers
-
-1. **Install Wrangler CLI**
-   ```bash
-   npm install -g wrangler
-   ```
-
-2. **Configure wrangler.toml**
-   ```toml
-   name = "your-bot-name"
-   compatibility_date = "2024-01-01"
-   
-   [vars]
-   # Add your environment variables here
-   ```
-
-3. **Deploy**
-   ```bash
-   bun run deploy
-   ```
-
-### Other Platforms
-
-This template can be deployed to any platform that supports Node.js:
-- Vercel
-- Railway
-- Heroku
-- DigitalOcean App Platform
-
-## 📡 Admin Panel
-
-The template includes admin endpoints for managing the bot:
-
-### Send Message to User
-```bash
-POST /admin/send-message
-{
-  "userId": "123456789",
-  "message": "Hello from admin!",
-  "parseMode": "Markdown"
-}
-```
-
-### Broadcast Message to All Users
-```bash
-POST /admin/broadcast
-{
-  "message": "📢 Important announcement!",
-  "parseMode": "HTML",
-  "excludeUserIds": ["123456789"]
-}
-```
-
-## 🔨 Customization
-
-### Adding New Commands
-
-1. **Add command handler in `src/lib/telegram/command.ts`:**
-   ```typescript
-   bot.command("mycommand", async (ctx) => {
-     await ctx.reply("My custom response!");
-   });
-   ```
-
-2. **Add business logic in `src/lib/telegram/handler.ts`** for message processing
-
-3. **Update database schema** if needed in `src/db/schema/`
-
-### Database Schema
-
-The template includes two main tables:
-- **users** - User profiles and preferences
-- **messages** - Conversation history
-
-Extend these schemas or add new ones in `src/db/schema/`.
-
-## 🧪 Testing
-
-```bash
-# Run all tests
-bun run test:unit
-
-# Run specific test file
-bun test tests/unit/utils/db.test.ts
-
-# Run tests in watch mode
-bun run test:watch
-```
-
-## 📋 Features Included
-
-✅ **Bot Infrastructure**
-- Webhook handling with grammY
-- Error handling and logging
-- Rate limiting for broadcasts
-- Admin authentication
-
-✅ **Database Integration**
-- User management
-- Message history
-- Type-safe queries with Drizzle ORM
-
-✅ **Admin Features**
-- Send messages to specific users
-- Broadcast to all users
-- User statistics
-
-✅ **Developer Experience**
-- TypeScript for type safety
-- Modern tooling (Bun, Biome)
-- Comprehensive testing setup
-- Well-structured project organization
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
-
-## 📝 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
----
-
-**Built with ❤️ for the Telegram bot development community**
