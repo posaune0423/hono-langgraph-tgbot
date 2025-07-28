@@ -1,9 +1,13 @@
-import { type BaseMessage, HumanMessage } from "@langchain/core/messages";
+import type { BaseMessage } from "@langchain/core/messages";
+import { HumanMessage } from "@langchain/core/messages";
+import { desc, eq } from "drizzle-orm";
 import { err, ok, type Result } from "neverthrow";
 import { createErrorMessage, TELEGRAM_CONFIG } from "../../constants/telegram";
+import { getDB, messages, users } from "../../db";
 import type { TelegramAgentError, TelegramMessageInput, TelegramMessageResult } from "../../types/telegram";
 import { logger } from "../../utils/logger";
 import { initTelegramGraph } from "./graph";
+import type { graphState } from "./graph-state";
 
 // Check if running in test environment
 const isTestEnvironment = (): boolean => {
@@ -109,14 +113,38 @@ export const handleTelegramMessage = async (
       messageLength: userMessage.length,
     });
 
+    // Fetch user data from database
+    let user = null;
+    try {
+      const db = getDB();
+      user = await db.query.users.findFirst({
+        where: eq(users.userId, userId),
+        with: {
+          messages: {
+            orderBy: desc(messages.timestamp),
+            limit: 10,
+          },
+        },
+      });
+      logger.info("User profile loaded", { userId, hasProfile: !!user });
+    } catch (dbError) {
+      logger.warn("Failed to load user profile, continuing without it", {
+        userId,
+        error: dbError instanceof Error ? dbError.message : dbError,
+      });
+    }
+
     // Create initial state with user message
-    const initialState = {
-      messages: [new HumanMessage(userMessage)],
-      userProfile: null, // Will be loaded by data-fetch node
+    const initialState: typeof graphState.State = {
+      messages: [
+        ...(user?.messages.map((m) => new HumanMessage(m.content)) ?? []),
+        new HumanMessage(userMessage),
+      ],
+      user: user || null, // Match graph state definition
     };
 
-    // Invoke the graph with timeout (20 seconds max)
-    const GRAPH_TIMEOUT_MS = 20 * 1000; // 20 seconds
+    // Invoke the graph with timeout (10 seconds max for faster response)
+    const GRAPH_TIMEOUT_MS = 10 * 1000; // 10 seconds
     const result = (await Promise.race([
       graph.invoke(initialState, config),
       new Promise<never>((_, reject) =>

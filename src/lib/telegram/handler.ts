@@ -35,28 +35,26 @@ const handleTextMessage = async (ctx: Context) => {
   processingUsers.add(userId);
 
   try {
-    // Upsert user profile
-    await upsertUser({
-      userId,
-      firstName,
-      lastName,
-      username,
-      languageCode,
-    });
-
-    // Save user message to database
-    await createMessage({
-      userId,
-      content: messageText,
-      messageType: "human",
-    });
-
-    // Process message with LangGraph agent
-    const result = await handleTelegramMessage({
-      userId,
-      userMessage: messageText,
-      userName: firstName || username,
-    });
+    // Parallelize user profile update and user message save with LangGraph processing
+    const [, , result] = await Promise.all([
+      upsertUser({
+        userId,
+        firstName,
+        lastName,
+        username,
+        languageCode,
+      }),
+      createMessage({
+        userId,
+        content: messageText,
+        messageType: "human",
+      }),
+      handleTelegramMessage({
+        userId,
+        userMessage: messageText,
+        userName: firstName || username,
+      }),
+    ]);
 
     let response: string;
 
@@ -72,15 +70,18 @@ const handleTextMessage = async (ctx: Context) => {
       });
     }
 
-    // Save AI response to database
-    await createMessage({
+    // Reply immediately to improve response time
+    await ctx.reply(response, {
+      parse_mode: "Markdown",
+    });
+
+    // Save AI response to database after replying (non-blocking)
+    createMessage({
       userId,
       content: response,
       messageType: "ai",
-    });
-
-    await ctx.reply(response, {
-      parse_mode: "Markdown",
+    }).catch((error) => {
+      logger.error("Failed to save AI response to database", { error, userId });
     });
   } catch (error) {
     logger.error("Error in text message handler", { error, userId });

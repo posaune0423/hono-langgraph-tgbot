@@ -1,5 +1,6 @@
-import { sql } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { messages } from "./message";
 
 /**
  * ユーザーテーブル - Telegramユーザーのプロフィール情報
@@ -21,6 +22,10 @@ export const users = sqliteTable("users", {
     .$onUpdateFn(() => Math.floor(Date.now() / 1000)),
   createdAt: integer("created_at").default(sql`(strftime('%s', 'now'))`).notNull(),
 });
+
+export const userRelations = relations(users, ({ many }) => ({
+  messages: many(messages),
+}));
 
 /**
  * 型定義（Drizzle推奨の型推論を活用）

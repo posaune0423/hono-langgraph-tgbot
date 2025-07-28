@@ -173,35 +173,29 @@ Try sending me any message and I'll respond! ✨
       return;
     }
 
-    await ctx.api.editMessageText(
-      ctx.chat.id,
-      result.message.message_id,
-      getPingMessage(result.responseTime),
-      { parse_mode: "Markdown" },
-    );
+    await ctx.api.editMessageText(ctx.chat.id, result.message.message_id, getPingMessage(result.responseTime), {
+      parse_mode: "Markdown",
+    });
   });
 
   // Callback query handlers for inline keyboard buttons
   bot.callbackQuery("help", async (ctx) => {
-    await ctx.answerCallbackQuery();
+    await ctx.answerCallbackQuery("Calling help...");
     await handleHelp((text, options) => ctx.editMessageText(text, options));
   });
 
   bot.callbackQuery("stats", async (ctx) => {
-    await ctx.answerCallbackQuery();
+    await ctx.answerCallbackQuery("Calling stats...");
     await handleStats(ctx.from?.id.toString(), (text, options) => ctx.editMessageText(text, options));
   });
 
   bot.callbackQuery("ping", async (ctx) => {
-    await ctx.answerCallbackQuery();
+    await ctx.answerCallbackQuery("Calling ping...");
 
     const result = await handlePing((text) => ctx.editMessageText(text));
 
     if (!result) return;
 
-    await ctx.editMessageText(
-      getPingMessage(result.responseTime),
-      { parse_mode: "Markdown" },
-    );
+    await ctx.editMessageText(getPingMessage(result.responseTime), { parse_mode: "Markdown" });
   });
 };

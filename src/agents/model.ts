@@ -10,7 +10,7 @@ export const gpt4o = new ChatOpenAI({
 export const gpt4oMini = new ChatOpenAI({
   modelName: "gpt-4o-mini",
   temperature: 0.7,
-  timeout: 15000, // 15 second timeout
+  timeout: 8000, // 8 second timeout for faster response
   apiKey: process.env.OPENAI_API_KEY,
 });
 

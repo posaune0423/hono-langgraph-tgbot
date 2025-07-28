@@ -10,7 +10,7 @@ export const graphState = Annotation.Root({
     default: () => [],
   }),
 
-  userProfile: Annotation<User | null>({
+  user: Annotation<User | null>({
     reducer: (oldValue, newValue) => newValue ?? oldValue,
     default: () => null,
   }),
