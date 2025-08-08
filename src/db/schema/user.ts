@@ -6,14 +6,12 @@ import { messages } from "./message";
  * ユーザーテーブル - Telegramユーザーのプロフィール情報
  */
 export const users = sqliteTable("users", {
-  userId: text("user_id").primaryKey().notNull(), // Telegram user ID
+  userId: integer("user_id").primaryKey().notNull(), // Telegram user ID
   firstName: text("first_name"),
   lastName: text("last_name"),
   username: text("username"),
   languageCode: text("language_code"), // User's language preference
-
-  // Bot interaction state
-  isActive: integer("is_active", { mode: "boolean" }).default(true),
+  walletAddress: text("wallet_address"),
 
   // Timestamps (SQLite uses INTEGER for Unix timestamps)
   lastActiveAt: integer("last_active_at")

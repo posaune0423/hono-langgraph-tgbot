@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { ADMIN_API_KEY_HEADER, ALLOWED_ORIGINS } from "./constants";
-import adminRoute from "./routes/admin";
+import { getDB } from "./db";
 import webhookRoute from "./routes/webhook";
 import { logger } from "./utils/logger";
 
@@ -27,11 +27,14 @@ app.use(
   }),
 );
 
+app.use(async (c, next) => {
+  const db = getDB(c.env.DB);
+  logger.debug("initialized db", { db });
+  await next();
+});
+
 // Telegram webhook endpoint
 app.route("/webhook", webhookRoute);
-
-// Admin API endpoints
-app.route("/admin", adminRoute);
 
 // --- Root and Maintenance Routes ---
 app.get("/", (c) => c.json({ status: "ok", message: "Hono server running!" }));

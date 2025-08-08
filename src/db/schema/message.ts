@@ -4,7 +4,7 @@ import { users } from "./user";
 
 export const messages = sqliteTable("messages", {
   messageId: text("message_id").primaryKey().notNull().default(sql`(lower(hex(randomblob(16))))`),
-  userId: text("user_id")
+  userId: integer("user_id")
     .notNull()
     .references(() => users.userId),
   content: text("content").notNull(),
