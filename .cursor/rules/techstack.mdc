@@ -16,7 +16,7 @@ alwaysApply: false
 - **AI/Agents**: LangChain JS + LangGraph (OpenAI/Groq/Tavily providers)
 - **Solana/Drift**: `@drift-labs/sdk`, `@solana/web3.js`, `@coral-xyz/anchor`, `solana-agent-kit`
 - **Auth/Identity**: Privy Server SDK
-- **Validation**: Zod
+- **Validation**: Valibot
 - **Format/Lint**: Biome
 - **Observability**: Cloudflare Workers Observability enabled
 - **Compat flags**: `nodejs_compat`, `nodejs_compat_populate_process_env`
@@ -50,5 +50,5 @@ alwaysApply: false
 - **Anchor**: [Anchor Docs](https://www.anchor-lang.com/)
 - **Solana Agent Kit**: [Agent Kit](https://github.com/coinbase/solana-agent-kit)
 - **Privy**: [Privy Docs](https://docs.privy.com/)
-- **Zod**: [Zod Docs](https://zod.dev/)
+- **Valibot**: [Valibot Docs](https://valibot.dev/)
 - **Biome**: [Biome Docs](https://biomejs.dev/)
