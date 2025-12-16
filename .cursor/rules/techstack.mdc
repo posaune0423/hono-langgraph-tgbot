@@ -1,0 +1,54 @@
+---
+description: Tech stack and official docs for this repository
+globs:
+alwaysApply: false
+---
+
+### Stack overview
+
+- **Language/Types**: TypeScript (strict)
+- **Runtime/PM/Test**: Bun 1.2.x (scripts, `bun test`)
+- **Build**: tsup (ESM, dts)
+- **Platform/Deploy**: Cloudflare Workers via Wrangler
+- **Web/API**: Hono
+- **Telegram Bot**: grammY
+- **DB/ORM**: Drizzle ORM + Cloudflare D1 (drizzle-kit, `d1-http` driver)
+- **AI/Agents**: LangChain JS + LangGraph (OpenAI/Groq/Tavily providers)
+- **Solana/Drift**: `@drift-labs/sdk`, `@solana/web3.js`, `@coral-xyz/anchor`, `solana-agent-kit`
+- **Auth/Identity**: Privy Server SDK
+- **Validation**: Zod
+- **Format/Lint**: Biome
+- **Observability**: Cloudflare Workers Observability enabled
+- **Compat flags**: `nodejs_compat`, `nodejs_compat_populate_process_env`
+
+### Key config files
+
+- `package.json` — scripts, dependencies
+- `wrangler.jsonc` — Workers entry (`src/worker.ts`), D1 binding, observability, compat flags
+- `drizzle.config.ts` — local SQLite via `LOCAL_DB_PATH` or Cloudflare D1 via `d1-http`
+- `tsconfig.json` — strict TS, bundler resolution, `hono/jsx`, `bun` types
+- `src/routes/` — Hono routes (e.g., `webhook.ts`)
+- `src/db/schema/` — Drizzle schema and migrations source
+
+### Official documentation
+
+- **Bun**: [Bun Docs](https://bun.sh/docs)
+- **Cloudflare Workers**: [Workers Docs](https://developers.cloudflare.com/workers/)
+- **Wrangler**: [Wrangler CLI](https://developers.cloudflare.com/workers/wrangler/)
+- **Cloudflare D1**: [D1 Docs](https://developers.cloudflare.com/d1/)
+- **Hono**: [Hono Docs](https://hono.dev/)
+- **grammY**: [grammY Docs](https://grammy.dev/)
+- **Drizzle ORM**: [Drizzle ORM](https://orm.drizzle.team/)
+- **Drizzle Kit**: [Drizzle Kit](https://orm.drizzle.team/kit-docs)
+- **LangChain JS**: [LangChain JS](https://js.langchain.com/)
+- **LangGraph**: [LangGraph](https://langchain.dev/langgraph)
+- **OpenAI**: [OpenAI API](https://platform.openai.com/docs)
+- **Groq**: [Groq API](https://console.groq.com/docs)
+- **Tavily**: [Tavily Docs](https://docs.tavily.com/)
+- **Drift**: [Drift Protocol Docs](https://docs.drift.trade/)
+- **Solana Web3.js**: [Web3.js Docs](https://solana-labs.github.io/solana-web3.js/)
+- **Anchor**: [Anchor Docs](https://www.anchor-lang.com/)
+- **Solana Agent Kit**: [Agent Kit](https://github.com/coinbase/solana-agent-kit)
+- **Privy**: [Privy Docs](https://docs.privy.com/)
+- **Zod**: [Zod Docs](https://zod.dev/)
+- **Biome**: [Biome Docs](https://biomejs.dev/)

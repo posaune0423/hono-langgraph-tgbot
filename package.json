@@ -15,31 +15,54 @@
     "cron:run": "bun --env-file=.dev.vars run scripts/run-cron.ts",
     "broadcast": "bun --env-file=.dev.vars run scripts/test-broadcast.ts",
     "build": "tsup src/**/*.ts --dts --format esm",
-    "format": "biome format --write .",
-    "lint": "biome check --write .",
+    "typecheck": "tsgo --noEmit",
+    "format": "prettier --check . --experimental-cli --experimental-ternaries",
+    "format:fix": "prettier --write . --experimental-cli --experimental-ternaries",
+    "lint": "eslint .",
+    "lint:fix": "eslint --fix .",
     "ci": "bun run format && bun run lint",
     "test": "bun --env-file=.dev.vars test",
     "test:unit": "bun --env-file=.dev.vars test tests/unit",
     "test:integration": "bun --env-file=.dev.vars test tests/integration"
   },
   "dependencies": {
-    "@langchain/community": "^0.3.49",
-    "@langchain/core": "^0.3.66",
-    "@langchain/groq": "^0.2.3",
-    "@langchain/langgraph": "^0.3.11",
+    "@langchain/community": "^0.3.58",
+    "@langchain/core": "^0.3.79",
+    "@langchain/groq": "^0.2.4",
+    "@langchain/langgraph": "^0.3.12",
     "@langchain/openai": "^0.5.18",
-    "drizzle-orm": "^0.44.3",
-    "grammy": "^1.37.0",
-    "hono": "^4.8.9",
+    "drizzle-orm": "^0.44.7",
+    "grammy": "^1.38.4",
+    "hono": "^4.11.1",
     "neverthrow": "^8.2.0",
     "zod": "^3.25.76"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.1.2",
-    "@types/bun": "^1.2.19",
-    "drizzle-kit": "^0.31.4",
-    "tsup": "^8.5.0",
-    "wrangler": "^4.26.0"
+    "@eslint/js": "^9.39.2",
+    "@eslint/json": "^0.14.0",
+    "@eslint/markdown": "^7.5.1",
+    "@prettier/plugin-oxc": "^0.1.3",
+    "@types/bun": "^1.3.4",
+    "@typescript/native-preview": "^7.0.0-dev.20251216.1",
+    "drizzle-kit": "^0.31.8",
+    "eslint": "^9.39.2",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-prettier": "^5.5.4",
+    "globals": "^16.5.0",
+    "jiti": "^2.6.1",
+    "prettier": "^3.7.4",
+    "prettier-plugin-organize-imports": "^4.3.0",
+    "tsup": "^8.5.1",
+    "typescript-eslint": "^8.50.0",
+    "wrangler": "^4.55.0"
   },
-  "packageManager": "bun@1.2.19"
+  "packageManager": "bun@1.3.4",
+  "prettier": {
+    "printWidth": 120,
+    "arrowParens": "avoid",
+    "plugins": [
+      "prettier-plugin-organize-imports",
+      "@prettier/plugin-oxc"
+    ]
+  }
 }

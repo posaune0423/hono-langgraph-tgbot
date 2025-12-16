@@ -1,34 +1,32 @@
 {
-  "files.associations": {
-    ".dev.vars": "dotenv",
-    ".dev.vars.example": "dotenv"
-  },
-
-  "editor.defaultFormatter": "biomejs.biome",
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
   "editor.codeActionsOnSave": {
-    "quickfix.biome": "explicit",
-    "source.organizeImports.biome": "explicit"
+    "source.fixAll.eslint": "explicit",
+    "source.organizeImports": "explicit"
   },
 
-  "biome.enabled": true,
-  "eslint.enable": false,
-  "prettier.enable": false,
+  "files.associations": {
+    "*.mdc": "markdown"
+  },
+
+  "biome.enabled": false,
+  "eslint.enable": true,
   "deno.enable": false,
 
-  "[typescript]": {
-    "editor.defaultFormatter": "biomejs.biome"
-  },
-  "[typescriptreact]": {
-    "editor.defaultFormatter": "biomejs.biome"
-  },
-  "[javascript]": {
-    "editor.defaultFormatter": "biomejs.biome"
+  "[mdx]": {
+    "editor.defaultFormatter": "unifiedjs.vscode-mdx"
   },
   "[json]": {
-    "editor.defaultFormatter": "biomejs.biome"
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
   },
   "[jsonc]": {
-    "editor.defaultFormatter": "biomejs.biome"
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[json5]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[markdown]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
   },
 
   "typescript.preferences.includePackageJsonAutoImports": "auto",
@@ -36,8 +34,13 @@
 
   "cSpell.words": [
     "bollinger",
+    "Chacha",
+    "ciphertext",
     "COOLDOWN",
+    "Dhkem",
+    "driftie",
     "helius",
+    "hpke",
     "langchain",
     "macd",
     "neverthrow",

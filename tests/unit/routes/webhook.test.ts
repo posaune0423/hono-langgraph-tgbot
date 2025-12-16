@@ -9,8 +9,7 @@ const resolvePath = (relative: string) => new URL(relative, import.meta.url).pat
 const botModulePath = resolvePath("../../../src/bot/index.ts");
 const routeModuleSpecifier = "../../../src/routes/webhook.ts";
 
-const freshImportRoute = async () =>
-  await import(`${routeModuleSpecifier}?v=${Date.now()}-${Math.random()}`);
+const freshImportRoute = async () => await import(`${routeModuleSpecifier}?v=${Date.now()}-${Math.random()}`);
 
 describe("Webhook Routes (Telegram)", () => {
   let originalToken: string | undefined;

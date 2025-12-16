@@ -6,7 +6,7 @@ import { logger } from "../utils/logger";
 
 const route = new Hono<{ Bindings: CloudflareBindings }>();
 
-route.post("/telegram", async (c) => {
+route.post("/telegram", async c => {
   try {
     // BOT_TOKENが設定されているか確認
     if (!process.env.TELEGRAM_BOT_TOKEN) {

@@ -1,0 +1,81 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "dev-server",
+      "type": "shell",
+      "command": "bun",
+      "args": ["run", "dev:local"],
+      "isBackground": true,
+      "problemMatcher": {
+        "pattern": {
+          "regexp": "^$",
+          "file": 1,
+          "location": 2,
+          "message": 3
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": ".*",
+          "endsPattern": ".*Ready.*|.*listening.*"
+        }
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "new",
+        "group": "dev",
+        "focus": false,
+        "clear": false
+      }
+    },
+    {
+      "label": "ngrok-start",
+      "type": "shell",
+      "command": "bun",
+      "args": ["run", "scripts/setup-ngrok-webhook.ts"],
+      "isBackground": true,
+      "problemMatcher": {
+        "pattern": {
+          "regexp": "^$"
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": ".*",
+          "endsPattern": ".*"
+        }
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "new",
+        "group": "dev",
+        "focus": false,
+        "clear": false
+      }
+    },
+    {
+      "label": "telegram-webhook:set",
+      "type": "shell",
+      "command": "bun",
+      "args": ["--env-file=.dev.vars", "run", "scripts/setup-webhook-only.ts"],
+      "dependsOn": ["ngrok-start"],
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "new",
+        "group": "dev",
+        "focus": false,
+        "clear": false
+      }
+    },
+    {
+      "label": "dev-with-telegram-webhook",
+      "dependsOn": ["dev-server", "ngrok-start", "telegram-webhook:set"],
+      "dependsOrder": "parallel",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "never",
+        "panel": "shared"
+      }
+    }
+  ]
+}

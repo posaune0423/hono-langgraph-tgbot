@@ -6,7 +6,7 @@ import { messages } from "./message";
  * ユーザーテーブル - Telegramユーザーのプロフィール情報
  */
 export const users = sqliteTable("users", {
-  userId: integer("user_id").primaryKey().notNull(), // Telegram user ID
+  userId: text("user_id").primaryKey().notNull(), // Telegram user ID
   firstName: text("first_name"),
   lastName: text("last_name"),
   username: text("username"),
@@ -18,7 +18,9 @@ export const users = sqliteTable("users", {
     .default(sql`(strftime('%s', 'now'))`)
     .notNull()
     .$onUpdateFn(() => Math.floor(Date.now() / 1000)),
-  createdAt: integer("created_at").default(sql`(strftime('%s', 'now'))`).notNull(),
+  createdAt: integer("created_at")
+    .default(sql`(strftime('%s', 'now'))`)
+    .notNull(),
 });
 
 export const userRelations = relations(users, ({ many }) => ({

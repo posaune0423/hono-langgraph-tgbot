@@ -30,7 +30,7 @@ export interface LogEntry {
   context: string;
   message: string;
   // biome-ignore lint/suspicious/noExplicitAny: data could be anything
-  data?: any;
+  data?: unknown;
 }
 
 // Admin message sending types

@@ -40,7 +40,7 @@ describe("Telegram LangGraph Agent", () => {
     const { graph, config } = await initAgent(999);
     const result = (await graph.invoke({ messages: [new HumanMessage("hi")] }, config)) as AgentState;
 
-    const contents = result.messages.map((m) => m.content);
+    const contents = result.messages.map(m => m.content);
     expect(contents.at(-1)).toBe("final");
     expect(contents).toContain("data-fetched");
     const idxFetch = contents.lastIndexOf("data-fetched");

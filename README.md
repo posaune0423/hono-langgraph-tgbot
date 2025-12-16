@@ -1,15 +1,15 @@
-# 🤖 Telegram Bot Template
+# 🦜🔗🔥 Telegram Bot Template
 
-A **minimal** and **production-ready** Telegram bot template built with modern technologies.
+A **minimal** and **production-ready** Telegram bot template built with **🦜🔗 LangGraph** and **🔥 Hono**.
 
 ## ✨ Features
 
 - 🔷 **TypeScript** for type safety and better development experience
-- 🌐 **Hono** web framework for fast and lightweight API routes
+- 🔥 **Hono** web framework for fast and lightweight API routes
 - 🤖 **grammY** for powerful Telegram Bot API integration
 - ☁️ **Cloudflare Workers** for serverless deployment
 - 🗄️ **Drizzle ORM** with **Cloudflare D1 SQLite** for database operations
-- 🤖 **LangGraph** for AI agent workflows
+- 🦜🔗 **LangGraph** for AI agent workflows
 - 📊 **User management** with conversation history
 - 🔐 **Admin panel** for broadcast messaging
 - 🧪 **Testing** setup with Vitest
@@ -27,22 +27,26 @@ A **minimal** and **production-ready** Telegram bot template built with modern t
 ### Installation
 
 1. **Clone the repository**
+
    ```bash
    git clone <repository-url>
    cd hono-langgraph-tgbot
    ```
 
 2. **Install dependencies**
+
    ```bash
    bun install
    ```
 
 3. **Set up environment variables**
+
    ```bash
    cp .dev.vars.example .dev.vars
    ```
-   
+
    Edit `.dev.vars` with your configuration:
+
    ```bash
    TELEGRAM_BOT_TOKEN=your_bot_token_here
    ADMIN_API_KEY=your_admin_api_key_here
@@ -50,7 +54,7 @@ A **minimal** and **production-ready** Telegram bot template built with modern t
    GROQ_API_KEY=your_groq_api_key_here
    TAVILY_API_KEY=your_tavily_api_key_here
    CRON_SECRET=your_cron_secret_here
-   
+
    # For D1 database management (get these from Cloudflare dashboard)
    CLOUDFLARE_ACCOUNT_ID=your_account_id
    CLOUDFLARE_DATABASE_ID=your_database_id
@@ -58,14 +62,16 @@ A **minimal** and **production-ready** Telegram bot template built with modern t
    ```
 
 4. **Set up Cloudflare D1 database**
-   
+
    First, create a D1 database:
+
    ```bash
    # Create a new D1 database
    npx wrangler d1 create hono-langgraph-tgbot
    ```
-   
+
    Copy the database ID from the output and update `wrangler.jsonc`:
+
    ```jsonc
    "d1_databases": [
      {
@@ -78,13 +84,14 @@ A **minimal** and **production-ready** Telegram bot template built with modern t
    ```
 
 5. **Generate and run database migrations**
+
    ```bash
    # Generate migration files
    bun run db:generate
-   
+
    # Apply migrations to local D1 database
    npx wrangler d1 migrations apply hono-langgraph-tgbot --local
-   
+
    # Apply migrations to remote D1 database (for production)
    npx wrangler d1 migrations apply hono-langgraph-tgbot --remote
    ```
@@ -157,6 +164,7 @@ curl "https://api.telegram.org/bot<YOUR_BOT_TOKEN>/setWebhook?url=https://<YOUR_
 ```
 
 Replace:
+
 - `<YOUR_BOT_TOKEN>` with your actual bot token
 - `<YOUR_DOMAIN>` with your deployed Cloudflare Workers domain
 
@@ -185,29 +193,33 @@ For local development and testing, you can use [ngrok](https://ngrok.com/) to ex
 #### Setting up ngrok
 
 1. **Install ngrok**
+
    ```bash
    # Using Homebrew (macOS)
    brew install ngrok
-   
+
    # Or download from https://ngrok.com/download
    ```
 
 2. **Start your local development server**
+
    ```bash
    bun run dev
    ```
-   
+
    Your server will typically run on `http://localhost:8787`
 
 3. **Expose your local server with ngrok**
+
    ```bash
    # Expose port 8787 (default Cloudflare Workers dev port)
    ngrok http 8787
    ```
-   
+
    ngrok will provide you with a public URL like: `https://abc123.ngrok.io`
 
 4. **Set webhook to your ngrok URL**
+
    ```bash
    curl "https://api.telegram.org/bot<YOUR_BOT_TOKEN>/setWebhook?url=https://abc123.ngrok.io/webhook/telegram"
    ```
@@ -230,7 +242,7 @@ If you prefer not to use webhooks during development, you can modify your bot to
 
 ```typescript
 // For development only - add this to your local setup
-if (process.env.NODE_ENV === 'development') {
+if (process.env.NODE_ENV === "development") {
   bot.start(); // Uses polling instead of webhooks
 }
 ```
@@ -248,20 +260,20 @@ The template includes these commands out of the box:
 
 ## 📁 Project Structure
 
-```
+```text
 ├── src/
 │   ├── constants # 諸々の定数を記述, 責務毎に分かりやすい名前のファイルを作成して管理しやすくしてください
 │   ├── cron.ts # cron処理で行う処理を記述
-│   ├── agents/ # LangGraph agents implementation
+│   ├── agents/ # 🦜🔗 LangGraph agents implementation
 │   │   ├── model.ts # LLM model configurations
 │   │   └── telegram/ # Telegram-specific agent
 │   ├── lib # third-party libraryやlibとして切り出したほうがいいinternalなmoduleなどを格納
-│   ├── routes # Honoのroute、APIの各endpointを管理、ある程度の責務でまとめたrouteとして渡す
+│   ├── routes # 🔥 Honoのroute、APIの各endpointを管理、ある程度の責務でまとめたrouteとして渡す
 │   ├── types # Typescriptの型定義
 │   ├── utils # globalに使うutil関数
 │   └── worker.ts # cloudflare workerのendpoint
 ├── docs/ # Project documentation
-│   └── agents-architecture.md # AI agents architecture guide
+│   └── agents-architecture.md # 🦜🔗 AI agents architecture guide
 ├── tests/
 │   ├── unit/ # Unit tests
 │   └── integration/ # Integration tests
@@ -274,18 +286,21 @@ For detailed information about the AI agents architecture, see [docs/agents-arch
 ### Deploy to Cloudflare Workers
 
 1. **Build and deploy**
+
    ```bash
    bun run deploy
    ```
 
 2. **Apply database migrations to production**
+
    ```bash
    npx wrangler d1 migrations apply hono-langgraph-tgbot --remote
    ```
 
 3. **Set up production environment variables**
-   
+
    In Cloudflare Workers dashboard or using Wrangler CLI, add these secrets:
+
    ```bash
    npx wrangler secret put TELEGRAM_BOT_TOKEN
    npx wrangler secret put ADMIN_API_KEY
@@ -328,7 +343,7 @@ bun run deploy               # Deploy to Cloudflare Workers
 bun run cf-typegen          # Generate Cloudflare bindings types
 
 # Utilities
-bun run format              # Format code with Biome
+bun run format              # Format code with Prettier
 bun run lint                # Lint and fix code issues
 bun run ci                  # Run format and lint checks
 
@@ -348,11 +363,12 @@ When making schema changes:
 5. **Deploy to production**: `bun run deploy`
 6. **Apply to production DB**: `npx wrangler d1 migrations apply hono-langgraph-tgbot --remote`
 
-## 🤖 AI Agents Integration
+## 🦜🔗 AI Agents Integration
 
-This template includes **LangGraph-powered AI agents** for intelligent conversation handling:
+This template includes **🦜🔗 LangGraph-powered AI agents** for intelligent conversation handling, built on top of **🔥 Hono** for blazing-fast API routes.
 
 ### Features
+
 - 📝 **Multi-turn conversations** with memory
 - 🔍 **External data integration** (Tavily search, APIs)
 - 🧠 **Context-aware responses** using conversation history
@@ -360,8 +376,14 @@ This template includes **LangGraph-powered AI agents** for intelligent conversat
 - 🔄 **Workflow orchestration** with conditional routing
 
 ### Agent Architecture
+
 - **General Node**: Handles general conversation and queries
 - **Data Fetch Node**: Retrieves external data and user preferences
 - **Manager Node**: Orchestrates complex workflows
+
+### Tech Stack Highlights
+
+- **🦜🔗 LangGraph**: Powerful AI agent framework for building stateful, multi-actor applications
+- **🔥 Hono**: Ultra-fast web framework perfect for Cloudflare Workers
 
 For detailed information about the AI agents architecture, see [docs/agents-architecture.md](./docs/agents-architecture.md).

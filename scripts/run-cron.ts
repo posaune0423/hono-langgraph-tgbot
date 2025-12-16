@@ -30,7 +30,7 @@ async function main() {
   }
 }
 
-main().catch((error) => {
+main().catch(error => {
   console.error("❌ Script execution failed:", error);
   logger.error("❌ Script execution failed:", error);
   process.exit(1);

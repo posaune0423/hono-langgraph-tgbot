@@ -37,15 +37,15 @@ app.use(async (c, next) => {
 app.route("/webhook", webhookRoute);
 
 // --- Root and Maintenance Routes ---
-app.get("/", (c) => c.json({ status: "ok", message: "Hono server running!" }));
+app.get("/", c => c.json({ status: "ok", message: "Hono server running!" }));
 
 // Health check endpoint
-app.get("/health", (c) => {
+app.get("/health", c => {
   return c.json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
 // --- Not Found Handler ---
-app.notFound((c) => {
+app.notFound(c => {
   logger.warn("not-found", `Not Found: ${c.req.method} ${c.req.url}`);
   return c.json(
     {

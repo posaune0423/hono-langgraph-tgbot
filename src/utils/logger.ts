@@ -71,7 +71,7 @@ const formatHeader = (level: LogLevel): string => {
 };
 
 const filterArgs = (...args: unknown[]): unknown[] => {
-  return args.filter((arg) => {
+  return args.filter(arg => {
     // 単純な数値は除外
     if (typeof arg === "number") return false;
     // 空文字列やundefined、nullは除外

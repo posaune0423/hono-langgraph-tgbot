@@ -16,29 +16,36 @@ const ALL_COMMANDS: { command: string; description: string }[] = [
 export const setupCommands = (bot: Bot) => {
   bot.api.setMyCommands(ALL_COMMANDS);
 
-  bot.command("start", async (ctx) => {
+  bot.command("start", async ctx => {
     const userId = ctx.from?.id;
     const firstName = ctx.from?.first_name;
     const lastName = ctx.from?.last_name;
     const username = ctx.from?.username;
     const languageCode = ctx.from?.language_code;
 
+    if (!userId) {
+      logger.error("User ID not found in context");
+      return;
+    }
+
     // Create or update user profile
     const db = getDB();
     await db
       .insert(users)
       .values({
-        userId,
+        userId: userId.toString(),
         firstName,
         lastName,
         username,
         languageCode,
-        lastActiveAt: Math.floor(Date.now() / 1000),
       })
       .onConflictDoUpdate({
         target: users.userId,
         set: {
-          lastActiveAt: Math.floor(Date.now() / 1000),
+          firstName,
+          lastName,
+          username,
+          languageCode,
         },
       });
 

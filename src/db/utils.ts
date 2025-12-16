@@ -1,12 +1,13 @@
 import { desc, eq } from "drizzle-orm";
 import { getDB, messages, type NewUser, users } from ".";
 
-export const getUser = async (userId: number, options?: { withMessages?: boolean }) => {
+export const getUser = async (userId: string, options?: { withMessages?: boolean }) => {
   const db = getDB();
   const user = await db.query.users.findFirst({
     where: eq(users.userId, userId),
-    with: options?.withMessages
-      ? {
+    with:
+      options?.withMessages ?
+        {
           messages: {
             orderBy: [desc(messages.timestamp)],
           },

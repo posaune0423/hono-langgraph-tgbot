@@ -53,10 +53,7 @@ describe("Telegram message handler", () => {
       initAgent: async () => ({
         graph: {
           invoke: async () => ({
-            messages: [
-              { content: "ignored" },
-              { content: "Hello from model" },
-            ],
+            messages: [{ content: "ignored" }, { content: "Hello from model" }],
           }),
         },
       }),

@@ -16,7 +16,7 @@ This document describes the architecture and organization of the AI agents syste
 
 ## 📁 Directory Structure
 
-```
+```text
 src/agents/
 ├── model.ts                    # LLM model configurations
 ├── telegram/                   # Telegram-specific agent implementation
@@ -35,6 +35,7 @@ src/agents/
 ### Core Components
 
 #### 1. **Model Configuration** (`model.ts`)
+
 - **Purpose**: Centralized LLM model configurations
 - **Responsibilities**:
   - Define OpenAI and Groq model instances
@@ -49,18 +50,20 @@ export const gpt4o = new ChatOpenAI({
 });
 
 export const gpt4oMini = new ChatOpenAI({
-  modelName: "gpt-4o-mini", 
+  modelName: "gpt-4o-mini",
   temperature: 0.7,
   apiKey: process.env.OPENAI_API_KEY,
 });
 ```
 
 #### 2. **Telegram Agent** (`telegram/`)
+
 Main agent implementation for Telegram bot functionality using LangGraph.
 
 ### 🔄 LangGraph Implementation
 
 #### **Graph Definition** (`graph.ts`)
+
 - **Purpose**: Define the conversation workflow
 - **Responsibilities**:
   - Initialize StateGraph with defined nodes
@@ -78,12 +81,13 @@ export async function initTelegramGraph(userId: string) {
 
   const graph = workflow.compile();
   const config = { configurable: { thread_id: userId } };
-  
+
   return { graph, config };
 }
 ```
 
 #### **State Management** (`graph-state.ts`)
+
 - **Purpose**: Define conversation state structure
 - **Responsibilities**:
   - Message history management
@@ -106,6 +110,7 @@ export const graphState = Annotation.Root({
 ```
 
 #### **Routing Logic** (`graph-route.ts`)
+
 - **Purpose**: Determine conversation flow
 - **Responsibilities**:
   - Route between different processing nodes
@@ -115,6 +120,7 @@ export const graphState = Annotation.Root({
 ### 🎯 Processing Nodes
 
 #### **General Node** (`nodes/general.ts`)
+
 - **Purpose**: Handle general conversation and queries
 - **Responsibilities**:
   - Process user messages with LLM
@@ -130,13 +136,14 @@ export const generalistNode = async (state: typeof graphState.State) => {
     prompt: generalPrompt,
     checkpointSaver: memory,
   });
-  
+
   const result = await agent.invoke({ messages });
   return { messages: [...result.messages] };
 };
 ```
 
 #### **Data Fetch Node** (`nodes/data-fetch.ts`)
+
 - **Purpose**: Retrieve and process external data
 - **Responsibilities**:
   - Load user preferences and profile
@@ -145,6 +152,7 @@ export const generalistNode = async (state: typeof graphState.State) => {
   - Handle data validation
 
 #### **Manager Node** (`nodes/manager.ts`)
+
 - **Purpose**: Orchestrate complex workflows
 - **Responsibilities**:
   - Coordinate multiple agents
@@ -155,6 +163,7 @@ export const generalistNode = async (state: typeof graphState.State) => {
 ### 💬 Prompt Management
 
 #### **General Prompts** (`prompts/general.ts`)
+
 - **Purpose**: Define conversation behavior
 - **Features**:
   - Specialized for cryptocurrency trading analysis
@@ -163,6 +172,7 @@ export const generalistNode = async (state: typeof graphState.State) => {
   - Markdown formatting instructions
 
 #### **Manager Prompts** (`prompts/manager.ts`)
+
 - **Purpose**: Guide orchestration decisions
 - **Features**:
   - Routing logic instructions
@@ -172,6 +182,7 @@ export const generalistNode = async (state: typeof graphState.State) => {
 ## 🔧 Integration Points
 
 ### **Database Integration** (`src/db/index.ts`)
+
 ```typescript
 export function getDB(database: D1Database) {
   return drizzle(database, { schema });
@@ -179,18 +190,21 @@ export function getDB(database: D1Database) {
 ```
 
 **Features**:
+
 - Type-safe database operations
 - Automatic schema validation
 - Connection management via Cloudflare Workers
 - Migration support for schema evolution
 
 ### **Data Fetch Node** (`nodes/data-fetch.ts`)
+
 - Loads user preferences and profile data
 - Retrieves conversation history for AI context
 - Handles data validation and error recovery
 - Prepares structured data for other nodes
 
 ### **Main Agent Interface** (`index.ts`)
+
 ```typescript
 export const handleTelegramMessage = async (
   input: TelegramMessageInput
@@ -198,12 +212,14 @@ export const handleTelegramMessage = async (
 ```
 
 **Features**:
+
 - Input validation with neverthrow
 - Graph initialization per user
 - Error handling and fallbacks
 - Structured response formatting
 
 ### **Handler Integration** (`lib/telegram/handler.ts`)
+
 - Integrates with Grammy bot framework
 - Manages user sessions and database
 - Handles Telegram-specific formatting
@@ -220,7 +236,7 @@ graph TD
     E --> F[Response Extraction]
     F --> G[Format for Telegram]
     G --> H[Send to User]
-    
+
     D --> I[Load User Data from D1]
     D --> J[Load Message History]
     E --> K[LLM Processing]
@@ -241,11 +257,13 @@ graph TD
 ## 🛡️ Error Handling
 
 ### Error Types
+
 - **VALIDATION_ERROR**: Invalid input parameters
 - **NO_CONTENT_ERROR**: Empty or invalid responses
 - **CONVERSATION_ERROR**: LLM or processing failures
 
 ### Recovery Strategies
+
 - Graceful fallbacks for missing data
 - User-friendly error messages
 - Logging for debugging
@@ -254,18 +272,21 @@ graph TD
 ## 🔮 Extension Points
 
 ### Adding New Nodes
+
 1. Create node file in `nodes/`
 2. Implement node function with state signature
 3. Add to graph definition in `graph.ts`
 4. Update routing logic if needed
 
 ### Adding New Tools
+
 1. Configure tool in relevant node
 2. Add API key management
 3. Update prompts if necessary
 4. Test integration
 
 ### Adding New Agent Types
+
 1. Create new directory under `agents/`
 2. Follow telegram/ structure pattern
 3. Implement required interfaces
@@ -299,6 +320,7 @@ graph TD
 The agents system integrates with **Cloudflare D1** (SQLite) for persistent data storage:
 
 #### **Database Schema**
+
 - **`users`**: User profiles, preferences, and interaction state
   - Telegram user information (ID, username, language)
   - Activity tracking (last active, creation date)
@@ -310,13 +332,10 @@ The agents system integrates with **Cloudflare D1** (SQLite) for persistent data
   - Message type classification (human/ai)
 
 #### **Data Access Pattern**
+
 ```typescript
 // Data Fetch Node queries user data
-const userProfile = await db
-  .select()
-  .from(users)
-  .where(eq(users.userId, telegramUserId))
-  .limit(1);
+const userProfile = await db.select().from(users).where(eq(users.userId, telegramUserId)).limit(1);
 
 // Conversation history for context
 const recentMessages = await db
@@ -328,6 +347,7 @@ const recentMessages = await db
 ```
 
 #### **State Persistence**
+
 - **LangGraph State**: Stored in-memory during conversation
 - **User Preferences**: Persisted in D1 database
 - **Conversation History**: Stored for AI context and analytics
@@ -343,12 +363,14 @@ const recentMessages = await db
 ## 🛡️ Data Security & Privacy
 
 ### Security Measures
+
 - **Encrypted at Rest**: D1 provides encryption by default
 - **Access Control**: Worker-level database binding
 - **Input Validation**: All user inputs validated before storage
 - **SQL Injection Prevention**: Drizzle ORM parameterized queries
 
 ### Privacy Considerations
+
 - **Data Minimization**: Only store necessary user data
 - **Retention Policy**: Consider implementing message history limits
 - **User Consent**: Telegram terms provide user consent framework
@@ -357,12 +379,14 @@ const recentMessages = await db
 ## 📈 Performance Monitoring
 
 ### Key Metrics
+
 - **Response Latency**: Database query performance
 - **Memory Usage**: LangGraph state management
 - **Database Operations**: Read/write patterns
 - **Error Rates**: Failed database connections
 
 ### Optimization Strategies
+
 - **Query Batching**: Combine multiple database operations
 - **Caching**: In-memory caching for frequently accessed data
 - **Indexing**: Optimize database queries with proper indexes
@@ -370,4 +394,4 @@ const recentMessages = await db
 
 ---
 
-*This architecture provides a scalable, maintainable foundation for AI agent development with clear separation of concerns and extensible design patterns.* 
+_This architecture provides a scalable, maintainable foundation for AI agent development with clear separation of concerns and extensible design patterns._
