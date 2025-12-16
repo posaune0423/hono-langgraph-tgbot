@@ -1,10 +1,9 @@
-import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
 import { HumanMessage } from "@langchain/core/messages";
+import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
 
 const agentModuleSpecifier = "../../../src/agents/telegram/index.ts";
 const graphStatePath = new URL("../../../src/agents/telegram/graph-state.ts", import.meta.url).pathname;
 const generalNodePath = new URL("../../../src/agents/telegram/nodes/general.ts", import.meta.url).pathname;
-const dataFetchNodePath = new URL("../../../src/agents/telegram/nodes/data-fetch.ts", import.meta.url).pathname;
 
 type AgentState = { messages: Array<HumanMessage> };
 
@@ -20,14 +19,7 @@ describe("Telegram LangGraph Agent", () => {
     mock.restore();
   });
 
-  it("initializes graph and executes nodes in order (dataFetch -> generalist)", async () => {
-    // Append identifiable messages to verify order
-    mock.module(dataFetchNodePath, () => ({
-      dataFetchNode: async (state: AgentState) => ({
-        ...state,
-        messages: [...(state.messages ?? []), new HumanMessage("data-fetched")],
-      }),
-    }));
+  it("initializes graph and executes generalist node", async () => {
     mock.module(generalNodePath, () => ({
       generalistNode: async (state: AgentState) => ({
         ...state,
@@ -42,11 +34,6 @@ describe("Telegram LangGraph Agent", () => {
 
     const contents = result.messages.map(m => m.content);
     expect(contents.at(-1)).toBe("final");
-    expect(contents).toContain("data-fetched");
-    const idxFetch = contents.lastIndexOf("data-fetched");
-    const idxFinal = contents.lastIndexOf("final");
-    expect(idxFetch).toBeGreaterThan(-1);
-    expect(idxFinal).toBeGreaterThan(idxFetch);
   });
 
   it("sets thread_id in config to user id", async () => {

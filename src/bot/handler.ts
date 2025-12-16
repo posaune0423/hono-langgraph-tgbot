@@ -16,14 +16,21 @@ const handleMessage = async (ctx: Context) => {
   }
 
   const { userId } = extractUserInfo(ctx);
-  const { graph } = await initAgent(userId);
-  const result = await graph.invoke({ messages: [new HumanMessage(userMessage)] });
-  const response = result.messages[result.messages.length - 1]?.content.toString();
+  const { graph, config } = await initAgent(userId);
 
-  if (!response) {
-    logger.error("handleMessage", "Response not found");
-    return;
+  const sentMessages = new Set<string>();
+  const stream = await graph.stream({ messages: [new HumanMessage(userMessage)] }, config);
+
+  for await (const event of stream) {
+    for (const [_nodeName, nodeOutput] of Object.entries(event)) {
+      const state = nodeOutput as { messages?: Array<{ content?: string }> };
+      const content = state.messages?.[state.messages.length - 1]?.content?.toString();
+
+      if (!content || sentMessages.has(content)) continue;
+
+      // Send intermediate output from generalist node or final output from __end__
+      sentMessages.add(content);
+      await ctx.reply(content);
+    }
   }
-
-  await ctx.reply(response.toString());
 };

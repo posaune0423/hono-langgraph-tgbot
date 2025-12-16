@@ -1,7 +1,6 @@
 import { END, START, StateGraph } from "@langchain/langgraph";
 import { logger } from "../../utils/logger";
 import { graphState, memory } from "./graph-state";
-import { dataFetchNode } from "./nodes/data-fetch";
 import { generalistNode } from "./nodes/general";
 
 export async function initAgent(userId: number) {
@@ -10,12 +9,10 @@ export async function initAgent(userId: number) {
 
     const workflow = new StateGraph(graphState)
       // nodes
-      .addNode("dataFetch", dataFetchNode)
       .addNode("generalist", generalistNode)
 
       // edges
-      .addEdge(START, "dataFetch")
-      .addEdge("dataFetch", "generalist")
+      .addEdge(START, "generalist")
       .addEdge("generalist", END);
 
     // Compile with memory saver for conversation persistence

@@ -48,14 +48,19 @@ describe("Telegram message handler", () => {
       extractUserInfo: () => ({ userId: 42 }),
     }));
 
-    // Mock initAgent -> returns graph.invoke producing response content
+    // Mock initAgent -> returns graph.stream producing response content
     mock.module(agentModulePath, () => ({
       initAgent: async () => ({
         graph: {
-          invoke: async () => ({
-            messages: [{ content: "ignored" }, { content: "Hello from model" }],
-          }),
+          stream: async function* () {
+            yield {
+              generalist: {
+                messages: [{ content: "ignored" }, { content: "Hello from model" }],
+              },
+            };
+          },
         },
+        config: { configurable: { thread_id: 42 } },
       }),
     }));
 

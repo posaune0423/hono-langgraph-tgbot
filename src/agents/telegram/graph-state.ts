@@ -15,11 +15,6 @@ export const graphState = Annotation.Root({
     default: () => null,
   }),
 
-  isDataFetchNodeQuery: Annotation<boolean>({
-    reducer: (oldValue, newValue) => newValue ?? oldValue ?? false,
-    default: () => false,
-  }),
-
   isGeneralQuery: Annotation<boolean>({
     reducer: (oldValue, newValue) => newValue ?? oldValue ?? false,
     default: () => false,

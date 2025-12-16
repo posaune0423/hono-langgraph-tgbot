@@ -6,7 +6,8 @@
   },
 
   "files.associations": {
-    "*.mdc": "markdown"
+    "*.mdc": "markdown",
+    ".dev.vars": "dotenv"
   },
 
   "biome.enabled": false,
@@ -23,6 +24,9 @@
     "editor.defaultFormatter": "esbenp.prettier-vscode"
   },
   "[json5]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[typescript]": {
     "editor.defaultFormatter": "esbenp.prettier-vscode"
   },
   "[markdown]": {
