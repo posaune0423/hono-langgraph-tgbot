@@ -70,6 +70,7 @@ describe("Telegram message handler", () => {
       message: { text: "hi" },
       reply: (text: string) => {
         replyCalls.push(text);
+        return Promise.resolve();
       },
     };
 
