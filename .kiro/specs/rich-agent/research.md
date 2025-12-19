@@ -9,7 +9,7 @@
 **主要な技術決定**:
 - LangGraph.jsのconditional edgesによるAgentic RAG実装
 - Neon PostgreSQL + pgvectorによるベクトル検索
-- LangGraph Store（`put/get/search` API）によるlong-term memory
+- long-term memory は **Neon(Postgres) の JSON（jsonb）** に保存（Repository 経由）
 - Neon PostgreSQLベースのcheckpointer（`@langchain/langgraph-checkpoint-postgres`）
 - GPT-4o Vision APIによる画像処理
 - Tavily Search APIによるWeb検索
@@ -81,7 +81,7 @@ interface Item {
 
 **設計への影響（Critical）**:
 - 当初の設計で想定していた `BaseStore`（`mget/mset/mdelete/yieldKeys`）はLangChain.jsのkey-value store用であり、LangGraph.jsのlong-term memory用Store（`put/get/search`）とは**別物**
-- Cloudflare KVアダプタは `put/get/search/delete` を実装する必要がある
+- Store を採用する場合は `put/get/search/delete` を実装する必要がある（v5では Store ではなく Postgres(jsonb) に集約）
 
 ### 2. configurable の設計パターン
 
@@ -226,9 +226,9 @@ const pool = new Pool({ connectionString: env.DATABASE_URL });
 export const dbPool = drizzle(pool);
 ```
 
-### 6. Cloudflare KV を LangGraph Store として実装
+### 6. Cloudflare KV を LangGraph Store として実装（検討したが v5 では不採用）
 
-**調査内容**: KVをLangGraph Storeインターフェースに適合させる方法
+**調査内容**: KVをLangGraph Storeインターフェースに適合させる方法（比較検討）
 
 **主要な発見**:
 
@@ -250,6 +250,9 @@ KV の制約と Store API のマッピング:
 - `search()` で返すメモリ数を制限（limit: 10程度）
 - semantic search が必要な場合は Neon(pgvector) と併用
 - 頻繁にアクセスするメモリはキャッシュ戦略を検討
+
+**v5 設計での結論**:
+- 「とにかく Neon 前提で動かす」要件に合わせ、long-term memory も Postgres(jsonb) に保存して一本化する。
 
 ### 7. Vision Summary キャッシュ
 
@@ -283,17 +286,15 @@ KV の制約と Store API のマッピング:
 - checkpointが各ノード境界で自動的に作成される
 - 各ノードを独立してテスト可能
 
-### Pattern 2: Dual Storage（採用）
+### Pattern 2: Single Storage（Neon Postgres） （採用）
 
-**説明**: D1（既存）+ Neon（新規）+ KV（新規）の役割分担
+**説明**: 永続化を Neon(Postgres) に一本化し、checkpoints/RAG/Vision/decision/conversation/long-term を同一DBへ集約する。
 
-- **D1**: 既存のusers/messagesテーブル（監査ログ）
-- **Neon**: checkpoints/RAGコーパス/Visionキャッシュ/decision log
-- **KV**: long-term memory（Store実装）
+- **Neon**: checkpoints / RAG / Vision cache / decision log / conversation logs / long-term memory
 
 **メリット**:
-- 既存コードへの影響を最小化
-- 各ストレージの特性を活かした設計
+- 運用/設定/障害切り分けを単純化できる
+- 「まず動かす」フェーズに適した最短構成になる
 
 ## Technology Decisions
 
@@ -302,8 +303,8 @@ KV の制約と Store API のマッピング:
 - **理由**: 公式サポート、durable execution、Workers互換（検証要）
 
 ### Long-term Memory Store
-- **選択**: Cloudflare KV（カスタムStore実装）
-- **理由**: 高読み取り性能、namespace対応、Workers native
+- **選択**: Neon(Postgres) の jsonb（Repository 実装）
+- **理由**: ストレージを一本化し、セットアップ/運用を最小化するため
 
 ### Embedding Model
 - **選択**: OpenAI `text-embedding-3-small`（1536次元）
@@ -319,13 +320,9 @@ KV の制約と Store API のマッピング:
 - **影響**: checkpointerが動作しない場合、durable executionが不可能
 - **対策**: 
   - 実装前にPoC実施
-  - 代替案: カスタムcheckpointer（KVベース）を検討
+  - 代替案: checkpointer を別実装に差し替え可能な DI 点を確保
 
-### Risk 2: KV Store の search() パフォーマンス（Medium）
-- **影響**: N+1問題による遅延
-- **対策**: limit制限、頻繁アクセスデータのキャッシュ
-
-### Risk 3: Workers CPU時間制限（Medium）
+### Risk 2: Workers CPU時間制限（Medium）
 - **影響**: 複雑なグラフ実行がタイムアウト
 - **対策**: ノード分割、重い処理の非同期化
 
@@ -335,12 +332,12 @@ KV の制約と Store API のマッピング:
 - `src/agents/telegram/index.ts`: Graph定義を拡張
 - `src/agents/telegram/graph-state.ts`: State Annotationを拡張
 - `src/bot/handler.ts`: 画像入力・reply context処理を追加
-- `src/db/schema/`: Neon用スキーマを追加（別ディレクトリ推奨）
+- `src/db/schema/`: **pg-core へ切り替え**、Neon 前提のスキーマへ統一
 
 ### External Dependencies（追加）
 - `@langchain/langgraph-checkpoint-postgres`: PostgreSQL checkpointer
 - `@neondatabase/serverless`: Neon serverless driver
-- `drizzle-orm/neon-http`: Drizzle Neon HTTP接続
+- `drizzle-orm/neon-serverless`: Drizzle Neon Pool 接続
 
 ## Parallelization Considerations
 

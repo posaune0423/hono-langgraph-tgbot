@@ -1,10 +1,9 @@
-# rich-agent - Technical Design (v4)
+# rich-agent - Technical Design (v5)
 
-> **変更概要 (v4)**
-> - 図をMermaidへ統一（読みやすさ改善）
-> - Telegram DM（1対1）前提に合わせ、**per-userで会話（short-term）を永続化**するthread設計へ修正
-> - `requirements.md` の全要件を満たすため、取り込み/引用/ストリーミング/interrupt/resume/idempotency を具体化
-> - **v4.1**: RepositoryパターンによるInfra抽象化を追加（移行手順は削除）
+> **変更概要 (v5)**
+> - **Neon(Postgres) 一本化**（冗長構成は考えない）
+> - スキーマ/マイグレーション/永続化を Postgres 前提に統一（D1/KV 依存を設計から除外）
+> - 既存テンプレ構造は維持しつつ、Repository パターンでインフラを抽象化
 
 ## 1. 概要
 
@@ -12,7 +11,7 @@ Telegram DM（1対1）でユーザーと対話し、(a) 事前登録Docs、(b) �
 
 - **実行モデル**: LangGraph.js `StateGraph`（State / Nodes / Edges）
 - **短期メモリ**: checkpointer により `thread_id` 単位で会話履歴を永続化
-- **長期メモリ**: Store（Cloudflare KV）に user namespace で JSON を保存
+- **長期メモリ**: Neon(Postgres) に user 単位で JSON を保存（Repository 経由）
 - **ストリーミング**: graph 実行中に「typing」「中間ステータス」「部分テキスト」を送る
 
 ## 2. Architecture Pattern & Boundary Map
@@ -34,9 +33,7 @@ graph TD
 
   subgraph "Persistence"
     CP["Checkpointer\nNeon Postgres"]
-    STORE["Long-term Store\nCloudflare KV"]
-    D1["D1 SQLite\nusers/messages (existing)"]
-    NEON["Neon Postgres\nRAG + Vision + Decision"]
+    PG["Neon Postgres\nConversation + Long-term + RAG + Vision + Decision"]
   end
 
   subgraph "External Services"
@@ -50,9 +47,7 @@ graph TD
   HANDLER --> GRAPH
 
   GRAPH --> CP
-  GRAPH --> STORE
-  GRAPH --> D1
-  GRAPH --> NEON
+  GRAPH --> PG
 
   GRAPH --> OPENAI
   GRAPH --> TAVILY
@@ -63,7 +58,7 @@ graph TD
 本ユースケースは **ユーザーとBotのDM（1対1）** を前提とし、要件に従い **per-userで会話内容を保持**する。
 
 - **thread_id（short-term）**: `tg:{telegram_user_id}`（固定）
-- **userId（long-term Store）**: `tg:{telegram_user_id}`（固定）
+- **userId（long-term）**: `tg:{telegram_user_id}`（固定）
 
 > 将来グループ対応する場合は `thread_id` を chat単位に拡張するが、本設計のスコープ外。
 
@@ -73,46 +68,38 @@ graph LR
   CFG --> UID["configurable.userId\n= tg:{telegram_user_id}"]
 
   TID --> CP["Checkpointer\n(restore messages)"]
-  UID --> STORE["Store\n(namespace users/{telegram_user_id})"]
+  UID --> PG["Postgres\n(users/{telegram_user_id})"]
 ```
 
 ## 3. Technology Stack & Alignment
 
 ### 3.1 既存コードとの整合（重要）
 
-- 既存のDB層は **D1(SQLite)+Drizzle**（`drizzle.config.ts` は sqlite/d1-http）。
-- Neon(Postgres) は **別スキーマ/別migration** として分離する。
+- 本機能（rich-agent）は **Neon(Postgres) 前提**で構成する。
+- DB スキーマ定義は `src/db/schema/*` に集約し、**`drizzle-orm/pg-core`** を使用する。
+- drizzle-kit の出力（migrations）は Postgres 用に一本化する。
+- 既存の `sqlite/d1-http`（D1）は本機能では使用せず、**Neon(Postgres) に置き換える**。
+- 「既存のschema（`src/db/schema/*`）」も **Postgres(pg-core) の定義へ書き換える**（`users/messages` を含む）。
 
 ```mermaid
 graph TD
-  D1S["D1 schema\n(src/db/schema/*)\nsqlite-core"] --> D1M["migrations/\n(D1)"]
-  NEONS["Neon schema\n(src/db/neon-schema/*)\npg-core"] --> NEONM["migrations-neon/\n(Neon)"]
-
-  D1S --> D1Q["D1 runtime queries"]
-  NEONS --> NEONQ["Neon runtime queries"]
+  PGS["Postgres schema\n(src/db/schema/*)\npg-core"] --> PGM["migrations/\n(Postgres)"]
+  PGS --> PGQ["Postgres runtime queries"]
 ```
 
 ### 3.2 Drizzle × Neon（Workers対応）
 
 参照: [Drizzle ORM - Database connection](https://orm.drizzle.team/docs/connect-overview)
 
-- **RAG/Vision/Decision（単発クエリ）**: `drizzle-orm/neon-http`
-- **Checkpointer（pg.Pool互換が必要）**: `@neondatabase/serverless` の `Pool`（WebSocket）を `PostgresSaver` に注入
+- **DB接続**: `@neondatabase/serverless` の `Pool`（WebSocket）
+- **Drizzle**: `drizzle-orm/neon-serverless`（Pool 経由）
+- **Checkpointer**: `@langchain/langgraph-checkpoint-postgres` の `PostgresSaver` に Pool を注入（pg.Pool 互換）
 
-> Workersでは `PostgresSaver.setup()` を実行しない。チェックポインタ用テーブルは **migrations-neon** で事前作成する。
-
-#### 3.2.1 重要: D1(SQLite) と Neon(Postgres) の Drizzle スキーマは分離する
-
-本リポジトリの既存 Drizzle は D1(SQLite) 前提（`drizzle.config.ts` / `drizzle-orm/sqlite-core`）であり、同一 `schema` エントリポイントに **pg-core のテーブル定義を混在**させると、型/マイグレーション/クエリ生成が破綻する。
-
-- **方針**:
-  - D1(SQLite) 用スキーマ: 既存の `src/db/schema/*`（sqlite-core）を維持
-  - Neon(Postgres) 用スキーマ: 新規に `src/db/neon-schema/*`（pg-core）を作成
-  - drizzle-kit 設定も **2つ**に分ける（D1用 / Neon用）
+> Workersでは `PostgresSaver.setup()` を実行しない（起動時CPU/冪等性/権限の観点）。必要テーブルは **migrations** で事前作成する。
 
 ### 3.3 Repository層でインフラ差分を吸収する（シンプル版）
 
-Port/Adapter のような大掛かりな構造にはせず、**Repository層**で Cloudflare 固有依存（KV/D1/Neon/Workers制約）を吸収する。
+Port/Adapter のような大掛かりな構造にはせず、**Repository層**でインフラ依存（Neon/Workers制約）を吸収する。
 Business logic（Graph/Nodes）は repository **インターフェース**にのみ依存し、実装は `createRepositories(env)` で組み立てる。
 
 ```mermaid
@@ -123,16 +110,14 @@ graph TD
   end
 
   subgraph "Repository implementations"
-    R_KV["KVLongTermMemoryRepository"]
-    R_NEON["NeonRagRepository\nNeonVisionCacheRepository\nNeonDecisionLogRepository"]
-    R_D1["D1ConversationLogRepository"]
+    R_PG_MEM["NeonLongTermMemoryRepository"]
+    R_PG_APP["NeonRagRepository\nNeonVisionCacheRepository\nNeonDecisionLogRepository\nNeonConversationLogRepository"]
     R_CP["NeonCheckpointerRepository"]
   end
 
   GRAPH --> REPO_IF
-  R_KV --> REPO_IF
-  R_NEON --> REPO_IF
-  R_D1 --> REPO_IF
+  R_PG_MEM --> REPO_IF
+  R_PG_APP --> REPO_IF
   R_CP --> REPO_IF
 ```
 
@@ -217,7 +202,6 @@ Stateは要件の最小フィールドを必ず含む。
 - **入力**: `(state, config)`
   - `config.configurable.thread_id`（必須）
   - `config.configurable.userId`（必須）
-  - `config.store`（long-term memory）
 - **出力**: `Partial<State>`
 - **副作用**: すべて **冪等キー** を持ち、再実行しても安全（REQ-DUR-2）
 
@@ -532,7 +516,7 @@ sequenceDiagram
 
 ### 12.3 Conversation logs（REQ 7.3）
 
-既存D1の `users/messages` を最低限の監査ログとして利用し、必要なら Neon へ移管。
+Neon(Postgres) に `users/messages` を保存し、監査・改善に利用する。
 
 ### 12.4 Vision cache（REQ 7.4）
 
@@ -541,51 +525,57 @@ sequenceDiagram
 
 ### 12.5 Long-term memory（REQ 7.5）
 
-KV: namespace に user_id を含め、keyでJSON管理。
+Neon(Postgres) に namespace/key を持つ JSON を保存する（例: `memory_items` テーブル）。
 
 ## 13. Requirements Traceability（全要件カバレッジ）
 
-- **REQ-TG-1**: §2.2 / §6.1（thread_id=tg:{telegram_user_id}）
-- **REQ-TG-2**: §6.1（photo入力をthread入力に紐付け）
-- **REQ-TG-3**: §6.1（reply_to_message photo解決）
-- **REQ-TG-4**: §6.2（typing/中間/部分テキスト）
+- **5.1.1**: §2.2 / §6.1（thread_id=tg:{telegram_user_id}）
+- **5.1.2**: §6.1（photo入力をthread入力に紐付け）
+- **5.1.3**: §6.1（reply_to_message photo解決）
+- **5.1.4**: §6.2（typing/中間/部分テキスト）
 
-- **REQ-VIS-1**: §7.1（JSON形状）
-- **REQ-VIS-2**: §7.2（sha256キャッシュ）
-- **REQ-VIS-3**: §7.3（State格納）
+- **5.2.1**: §7.1（JSON形状）
+- **5.2.2**: §7.2（sha256キャッシュ）
+- **5.2.3**: §7.3（State格納）
 
-- **REQ-RAG-1**: §8.1（複数ソース登録）
-- **REQ-RAG-2**: §8.2（Web/Local正規化）
-- **REQ-RAG-3**: §8.3（chunkメタデータ）
-- **REQ-RAG-4**: §8.4（top-K + 引用）
-- **REQ-RAG-5**: §8.5（差分取り込み）
-- **REQ-RAG-6**: §8.6（retrieval decision + 記録）
+- **5.3.1**: §8.1（複数ソース登録）
+- **5.3.2**: §8.2（Web/Local正規化）
+- **5.3.3**: §8.3（chunkメタデータ）
+- **5.3.4**: §8.4（top-K + 引用）
+- **5.3.5**: §8.5（差分取り込み）
+- **5.3.6**: §8.6（retrieval decision + 記録）
 
-- **REQ-MEM-1**: §9.1（checkpointer復元）
-- **REQ-MEM-2**: §9.1（DB-backed checkpointer）
-- **REQ-MEM-3**: §9.2（namespaceにuser_id）
-- **REQ-MEM-4**: §9.2（facts/preferences/tasks更新）
-- **REQ-MEM-5**: §9.2（namespace/key取得 + semantic拡張点）
+- **5.4.1**: §9.1（checkpointer復元）
+- **5.4.2**: §9.1（DB-backed checkpointer）
+- **5.4.3**: §9.2（namespaceにuser_id）
+- **5.4.4**: §9.2（facts/preferences/tasks更新）
+- **5.4.5**: §9.2（namespace/key取得 + semantic拡張点）
 
-- **REQ-DUR-1**: §10.1
-- **REQ-DUR-2**: §10.2
-- **REQ-INT-1**: §10.3
+- **5.5.1**: §10.1
+- **5.5.2**: §10.2
+- **5.5.3**: §10.3
 
-- **REQ-ROUTE-1..5**: §11.1
-- **REQ-TOOL-1..3**: §11.2 / §8.6
+- **5.6.1**: §11.1
+- **5.6.2**: §11.1
+- **5.6.3**: §11.1
+- **5.6.4**: §11.1
+- **5.6.5**: §11.1
+- **5.6.6**: §11.2 / §8.6
+- **5.6.7**: §11.2 / §8.6
+- **5.6.8**: §11.2 / §8.6
 
-- **REQ 6.1**: §4.1
-- **REQ 6.2**: §5.1
-- **REQ 6.3**: §5.2
+- **6.1.1**: §4.1
+- **6.2.1**: §5.1
+- **6.3.1, 6.3.2, 6.3.3, 6.3.4**: §5.2
 
-- **REQ 7.1..7.5**: §12
+- **7.1.1, 7.2.1, 7.3.1, 7.4.1, 7.5.1**: §12
 
-- **NFR-REL-1..2**: §9.1 / §10.3
-- **NFR-IDEMP-1**: §10.2
-- **NFR-OBS-1**: §11.2（decision log）+ node logging（実装タスクで具体化）
-- **NFR-UX-1**: §6.2
-- **NFR-COST-1..2**: §7.2 / §8.5
-- **NFR-DEP-1..2**: §3.1 / 運用（secrets分離）
+- **8.1, 8.2**: §9.1 / §10.3
+- **8.3**: §10.2
+- **8.4**: §11.2（decision log）+ node logging（実装タスクで具体化）
+- **8.5**: §6.2
+- **8.6, 8.7**: §7.2 / §8.5
+- **8.8, 8.9**: §3.1 / 運用（secrets分離）
 
 ## 14. 実装に直結する注意点（DM前提）
 
